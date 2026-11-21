@@ -753,6 +753,59 @@ img {
   width: 100%;
   aspect-ratio: 1 / 0.88;
   object-fit: cover;
+  cursor: zoom-in;
+  transition: transform 220ms ease;
+}
+
+.menu-item-image-wrap:hover img {
+  transform: scale(1.025);
+}
+
+.menu-item-zoom-preview {
+  position: fixed;
+  z-index: 100;
+  width: min(340px, calc(100vw - 24px));
+  height: 280px;
+  overflow: hidden;
+  border: 5px solid var(--paper);
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 0 18px 48px rgba(38, 53, 44, 0.28);
+  pointer-events: none;
+}
+
+.menu-item-zoom-preview.is-locked {
+  pointer-events: auto;
+}
+
+.menu-item-zoom-preview button {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(38, 53, 44, 0.82);
+  color: white;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.menu-item-zoom-preview.is-locked button {
+  opacity: 1;
+}
+
+.menu-item-zoom-preview img {
+  width: 100%;
+  height: 100%;
+  transform: scale(1.35);
+  object-fit: cover;
 }
 
 .menu-item-gallery {
@@ -2454,6 +2507,33 @@ img {
   color: var(--green);
   font-size: 10px;
   font-weight: 700;
+}
+
+.admin-gallery-file {
+  width: 100%;
+  padding: 9px;
+  border: 1px dashed #adb8a8;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.admin-gallery-file::file-selector-button {
+  margin-right: 10px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--green);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-upload-status {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-character-count {

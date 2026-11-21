@@ -1,8 +1,12 @@
 import "dotenv/config";
 import { createServer } from "node:http";
+import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { extname } from "node:path";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
+import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import { Server as SocketServer } from "socket.io";
@@ -32,6 +36,25 @@ const httpServer = createServer(app);
 const io = new SocketServer(httpServer);
 const port = Number(process.env.PORT ?? 3001);
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const uploadsDirectory = resolve(projectRoot, "public", "uploads");
+mkdirSync(uploadsDirectory, { recursive: true });
+const menuImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadsDirectory,
+    filename: (_request, file, callback) => {
+      const extension = extname(file.originalname).toLowerCase();
+      callback(null, `${randomUUID()}${extension}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_request, file, callback) => {
+    if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Chỉ hỗ trợ ảnh JPEG, PNG, WEBP hoặc GIF."));
+    }
+  },
+});
 const isProduction =
   process.env.NODE_ENV === "production" || process.argv.includes("--production");
 
@@ -48,6 +71,7 @@ app.use(helmet({
   },
 }));
 app.use(express.json({ limit: "32kb" }));
+app.use("/uploads", express.static(uploadsDirectory));
 app.use("/api/auth", (_request, response, next) => {
   response.setHeader("Cache-Control", "no-store");
   next();
@@ -136,14 +160,8 @@ function validateMenuItem(body) {
       return { error: "Vui lòng nhập đủ đường dẫn và mô tả cho cả 3 hình ảnh." };
     }
 
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
+    if (!/^https?:\/\//i.test(url) && !/^\/uploads\//.test(url)) {
       return { error: "Đường dẫn hình ảnh không hợp lệ." };
-    }
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return { error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." };
     }
     validatedGallery.push({ url, alt });
   }
@@ -449,6 +467,23 @@ app.post(
       WHERE menu_reviews.menu_item_id = ? AND menu_reviews.user_id = ?
     `, [menuId, request.user.id]);
     response.status(201).json(review);
+  }),
+);
+
+app.post(
+  "/api/admin/menu/upload-image",
+  requireAuth,
+  requireAdmin,
+  menuImageUpload.single("image"),
+  asyncRoute(async (request, response) => {
+    if (!request.file) {
+      response.status(400).json({ error: "Vui lòng chọn một hình ảnh." });
+      return;
+    }
+    response.status(201).json({
+      url: `/uploads/${request.file.filename}`,
+      originalName: request.file.originalname,
+    });
   }),
 );
 

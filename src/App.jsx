@@ -12,6 +12,7 @@ import MenuItemPage from "./sections/MenuItemPage.jsx";
 import MenuPage from "./sections/MenuPage.jsx";
 import NotFoundPage from "./sections/NotFoundPage.jsx";
 import StoryPage from "./sections/StoryPage.jsx";
+import SpacePage from "./sections/SpacePage.jsx";
 import VisitPage from "./sections/VisitPage.jsx";
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/story" element={<StoryPage />} />
+          <Route path="/space" element={<SpacePage />} />
           <Route path="/menu/:slug" element={<MenuItemPage />} />
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/visit" element={<VisitPage />} />

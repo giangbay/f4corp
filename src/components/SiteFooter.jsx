@@ -10,6 +10,7 @@ export default function SiteFooter() {
         <span className="footer-note">Một tách cà phê, một ngày dịu dàng.</span>
         <div className="footer-links">
           <Link to="/story">Câu chuyện</Link>
+          <Link to="/space">Không gian</Link>
           <Link to="/menu">Thực đơn</Link>
           <Link to="/visit">Liên hệ</Link>
         </div>

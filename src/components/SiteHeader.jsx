@@ -90,9 +90,9 @@ export default function SiteHeader() {
           </Link>
           <NavLink to="/menu">Thực đơn</NavLink>
           <Link
-            to="/story#khong-gian"
+            to="/space"
             aria-current={
-              location.pathname === "/story" && location.hash === "#khong-gian"
+              location.pathname === "/space"
                 ? "location"
                 : undefined
             }

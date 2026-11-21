@@ -24,11 +24,11 @@ export default function StoryPage() {
             Tìm đường đến Mộc <span aria-hidden="true">→</span>
           </Link>
         </div>
-        <div className="intro-photo-wrap" id="khong-gian">
+        <div className="intro-photo-wrap">
           <img
             className="intro-photo"
             src="https://images.unsplash.com/photo-1445116572660-236099ec97a0?auto=format&fit=crop&w=1100&q=85"
-            alt="Không gian quán cà phê thoáng đãng với bàn gỗ"
+            alt="Quán cà phê Mộc Nhiên"
             loading="lazy"
           />
         </div>

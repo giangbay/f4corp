@@ -70,6 +70,7 @@ export default function AdminMenuSection() {
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
+  const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
 
   function updateField(event) {
     const { name, value, checked, type } = event.target;
@@ -116,6 +117,32 @@ export default function AdminMenuSection() {
     setProduct(EMPTY_PRODUCT);
     setFormError("");
     setSuccess("");
+  }
+
+  async function handleImageUpload(index, file) {
+    if (!file) return;
+    setUploadingImageIndex(index);
+    setFormError("");
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const uploaded = await fetchApi("/admin/menu/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+      setProduct((current) => ({
+        ...current,
+        galleryImages: current.galleryImages.map((image, imageIndex) =>
+          imageIndex === index
+            ? { ...image, url: uploaded.url, alt: image.alt || uploaded.originalName }
+            : image,
+        ),
+      }));
+    } catch (requestError) {
+      setFormError(requestError.message);
+    } finally {
+      setUploadingImageIndex(null);
+    }
   }
 
   useEffect(() => {
@@ -286,19 +313,21 @@ export default function AdminMenuSection() {
                 <span className="admin-gallery-image-number">
                   Ảnh {index + 1}{index === 0 ? " · ảnh đại diện" : ""}
                 </span>
-                <label className="visually-hidden" htmlFor={`product-image-${index}`}>
-                  Đường dẫn hình ảnh {index + 1}
-                </label>
                 <input
+                  className="admin-gallery-file"
                   id={`product-image-${index}`}
                   name={`galleryImages.${index}.url`}
-                  type="url"
-                  value={image.url}
-                  onChange={updateField}
-                  maxLength={1000}
-                  placeholder="https://..."
-                  required
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(event) => handleImageUpload(index, event.target.files?.[0])}
+                  required={!image.url}
                 />
+                {uploadingImageIndex === index && (
+                  <span className="admin-upload-status">Đang tải ảnh lên…</span>
+                )}
+                {image.url && (
+                  <span className="admin-upload-status">Đã có ảnh · {image.url}</span>
+                )}
                 <label className="visually-hidden" htmlFor={`product-image-alt-${index}`}>
                   Mô tả hình ảnh {index + 1}
                 </label>

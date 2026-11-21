@@ -1,11 +1,12 @@
 import React from "react";
 
 export async function fetchApi(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
       "X-Requested-With": "XMLHttpRequest",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...options.headers,
     },
   });
