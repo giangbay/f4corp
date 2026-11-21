@@ -26,7 +26,7 @@ function StarDisplay({ rating }) {
   );
 }
 
-export default function MenuReviews({ menuId, menuName }) {
+export default function MenuReviews({ menuId, menuName, onReviewsChange }) {
   const { user, loading: authLoading } = useAuth();
   const [reviewData, setReviewData] = useState(EMPTY_REVIEWS);
   const [loading, setLoading] = useState(true);
@@ -42,10 +42,12 @@ export default function MenuReviews({ menuId, menuName }) {
     setLoading(true);
     setLoadError("");
     setReviewData(EMPTY_REVIEWS);
+    onReviewsChange({ reviews: [], loading: true, error: "" });
 
     fetchApi(`/menu/${menuId}/reviews`, { signal: controller.signal })
       .then((data) => {
         setReviewData(data);
+        onReviewsChange({ reviews: data.reviews, loading: false, error: "" });
         if (data.ownReview) {
           setRating(data.ownReview.rating);
           setContent(data.ownReview.content);
@@ -55,14 +57,17 @@ export default function MenuReviews({ menuId, menuName }) {
         }
       })
       .catch((error) => {
-        if (error.name !== "AbortError") setLoadError(error.message);
+        if (error.name !== "AbortError") {
+          setLoadError(error.message);
+          onReviewsChange({ reviews: [], loading: false, error: error.message });
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => controller.abort();
-  }, [menuId]);
+  }, [menuId, onReviewsChange]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -79,6 +84,11 @@ export default function MenuReviews({ menuId, menuName }) {
       try {
         const updatedData = await fetchApi(`/menu/${menuId}/reviews`);
         setReviewData(updatedData);
+        onReviewsChange({
+          reviews: updatedData.reviews,
+          loading: false,
+          error: "",
+        });
       } catch (refreshError) {
         setFormError(
           `Đánh giá đã được lưu nhưng chưa thể tải lại danh sách: ${refreshError.message}`,

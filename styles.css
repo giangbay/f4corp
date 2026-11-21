@@ -560,6 +560,166 @@ img {
   background: var(--cream);
 }
 
+.menu-item-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.menu-item-page-layout.is-admin,
+.menu-item-page-layout:not(.is-admin) {
+  grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
+}
+
+.menu-item-main {
+  min-width: 0;
+}
+
+.menu-item-admin-panel {
+  position: sticky;
+  top: 108px;
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.admin-panel-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9ede5;
+  color: var(--green);
+  font-size: 19px;
+}
+
+.menu-item-admin-panel h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.menu-item-admin-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.menu-item-admin-panel .button {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.menu-item-admin-note {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.menu-item-visitor-sidebar {
+  position: sticky;
+  top: 108px;
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.menu-item-sidebar-section h2 {
+  margin: 8px 0 16px;
+  font-family: var(--serif);
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.menu-item-suggestion-list,
+.menu-item-latest-reviews {
+  display: grid;
+}
+
+.menu-item-suggestion {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding-block: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.menu-item-suggestion img {
+  width: 62px;
+  height: 62px;
+  object-fit: cover;
+}
+
+.menu-item-suggestion > span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.menu-item-suggestion strong,
+.menu-item-latest-review strong {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.menu-item-suggestion > span > span {
+  color: var(--orange);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.menu-item-latest-review {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.menu-item-latest-review > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.menu-item-latest-review time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.menu-item-latest-rating {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--orange);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.menu-item-latest-review p,
+.menu-item-sidebar-empty {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .menu-breadcrumb {
   display: flex;
   align-items: center;
@@ -2790,6 +2950,67 @@ img {
 
   .menu-item-section {
     padding-block: 30px 62px;
+  }
+
+  .menu-item-page-layout.is-admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .menu-item-page-layout:not(.is-admin) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .menu-item-visitor-sidebar {
+    position: static;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    padding: 16px;
+  }
+
+  .menu-item-sidebar-section {
+    min-width: 0;
+  }
+
+  .menu-item-admin-panel {
+    position: static;
+    order: -1;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+    padding: 15px;
+  }
+
+  .menu-item-admin-panel .admin-panel-icon {
+    grid-row: span 2;
+  }
+
+  .menu-item-admin-panel .eyebrow {
+    align-self: end;
+  }
+
+  .menu-item-admin-panel h2,
+  .menu-item-admin-panel p,
+  .menu-item-admin-panel .button,
+  .menu-item-admin-note {
+    grid-column: 1 / -1;
+  }
+
+  .menu-item-admin-panel .button {
+    width: auto;
+  }
+
+  .menu-item-visitor-sidebar .menu-item-sidebar-section h2 {
+    font-size: 19px;
+  }
+
+  .menu-item-suggestion {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .menu-item-suggestion img {
+    width: 52px;
+    height: 52px;
   }
 
   .menu-breadcrumb {

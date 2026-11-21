@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useAuth } from "../AuthContext.jsx";
 import { useApiResource } from "../api.js";
+import MenuItemSidebar from "../components/MenuItemSidebar.jsx";
 import MenuReviews from "../components/MenuReviews.jsx";
 import ResourceStatus from "../components/ResourceStatus.jsx";
 import SeoMetadata from "../components/SeoMetadata.jsx";
@@ -9,9 +11,15 @@ import { getMenuItemPath } from "../menuSlug.js";
 
 export default function MenuItemPage() {
   const { slug } = useParams();
+  const { user } = useAuth();
   const { data: items, loading, error } = useApiResource("/menu");
   const item = items.find((menuItem) => getMenuItemPath(menuItem).slice(6) === slug);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [latestReviewState, setLatestReviewState] = useState({
+    reviews: [],
+    loading: true,
+    error: "",
+  });
   const galleryImages = item?.galleryImages?.length
     ? item.galleryImages
     : item
@@ -20,6 +28,7 @@ export default function MenuItemPage() {
 
   useEffect(() => {
     setSelectedImageIndex(0);
+    setLatestReviewState({ reviews: [], loading: true, error: "" });
   }, [item?.id]);
 
   if (loading || error) {
@@ -38,6 +47,16 @@ export default function MenuItemPage() {
   const bestSellerItems = items.filter(
     (menuItem) => Boolean(menuItem.bestSeller) && menuItem.id !== item.id,
   );
+  const otherItems = items.filter((menuItem) => menuItem.id !== item.id);
+  const suggestedItems = [
+    ...otherItems.filter((menuItem) => Boolean(menuItem.bestSeller)),
+    ...otherItems.filter(
+      (menuItem) => menuItem.category === item.category && !menuItem.bestSeller,
+    ),
+    ...otherItems.filter(
+      (menuItem) => menuItem.category !== item.category && !menuItem.bestSeller,
+    ),
+  ].slice(0, 3);
   const description = `${introduction} Thưởng thức ${item.name} tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.`;
   const structuredData = {
     "@context": "https://schema.org",
@@ -75,93 +94,142 @@ export default function MenuItemPage() {
             <span aria-hidden="true">/</span>
             <span aria-current="page">{item.name}</span>
           </nav>
-          <article className="menu-item-detail">
-            <div className="menu-item-gallery">
-              <div className="menu-item-image-wrap">
-                <img
-                  src={galleryImages[selectedImageIndex].url}
-                  alt={galleryImages[selectedImageIndex].alt}
-                />
-              </div>
-              {galleryImages.length > 1 && (
-                <div className="menu-item-gallery-thumbnails" aria-label="Thư viện hình ảnh sản phẩm">
-                  {galleryImages.map((galleryImage, index) => (
-                    <button
-                      aria-label={`Xem hình ${index + 1}: ${galleryImage.alt}`}
-                      aria-pressed={selectedImageIndex === index}
-                      className={selectedImageIndex === index ? "is-selected" : ""}
-                      key={`${galleryImage.url}-${index}`}
-                      onClick={() => setSelectedImageIndex(index)}
-                      type="button"
-                    >
-                      <img src={galleryImage.url} alt="" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="menu-item-copy">
-              <span className="eyebrow">Món ngon tại Mộc Nhiên Coffee</span>
-              <h1>{item.name}</h1>
-              {Boolean(item.bestSeller) && (
-                <span className="best-seller-badge">Món bán chạy</span>
-              )}
-              <p className="menu-item-description">{item.description}</p>
-              <p className="menu-item-price">
-                {item.price.toLocaleString("vi-VN")}đ
-              </p>
-              <p className="menu-item-location">
-                Thưởng thức tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.
-              </p>
-              <div className="menu-item-actions">
-                <Link className="button" to="/visit">
-                  Ghé quán thưởng thức
-                </Link>
-                <Link className="text-link" to="/menu">
-                  ← Quay lại thực đơn
-                </Link>
-              </div>
-            </div>
-          </article>
-          <section className="menu-item-introduction" aria-labelledby="menu-introduction-heading">
-            <span className="eyebrow">Câu chuyện hương vị</span>
-            <h2 id="menu-introduction-heading">Giới thiệu về {item.name}</h2>
-            <p>{introduction}</p>
-          </section>
-          <MenuReviews menuId={item.id} menuName={item.name} />
-          {bestSellerItems.length > 0 && (
-            <section className="best-seller-recommendations" aria-labelledby="best-seller-heading">
-              <div className="best-seller-heading">
-                <div>
-                  <span className="eyebrow">Được yêu thích tại Mộc</span>
-                  <h2 id="best-seller-heading">Món bán chạy</h2>
-                </div>
-                <Link className="text-link" to="/menu">Xem toàn bộ thực đơn →</Link>
-              </div>
-              <div className="best-seller-grid">
-                {bestSellerItems.map((recommendedItem) => (
-                  <Link
-                    className="best-seller-card"
-                    key={recommendedItem.id}
-                    to={getMenuItemPath(recommendedItem)}
-                  >
+          <div
+            className={`menu-item-page-layout${user?.role === "admin" ? " is-admin" : ""}`}
+          >
+            <div className="menu-item-main">
+              <article className="menu-item-detail">
+                <div className="menu-item-gallery">
+                  <div className="menu-item-image-wrap">
                     <img
-                      src={recommendedItem.image}
-                      alt={recommendedItem.imageAlt}
-                      loading="lazy"
+                      src={galleryImages[selectedImageIndex].url}
+                      alt={galleryImages[selectedImageIndex].alt}
                     />
-                    <div>
-                      <span className="best-seller-badge">Bán chạy</span>
-                      <h3>{recommendedItem.name}</h3>
-                      <span className="price">
-                        {recommendedItem.price.toLocaleString("vi-VN")}đ
-                      </span>
+                  </div>
+                  {galleryImages.length > 1 && (
+                    <div
+                      className="menu-item-gallery-thumbnails"
+                      aria-label="Thư viện hình ảnh sản phẩm"
+                    >
+                      {galleryImages.map((galleryImage, index) => (
+                        <button
+                          aria-label={`Xem hình ${index + 1}: ${galleryImage.alt}`}
+                          aria-pressed={selectedImageIndex === index}
+                          className={selectedImageIndex === index ? "is-selected" : ""}
+                          key={`${galleryImage.url}-${index}`}
+                          onClick={() => setSelectedImageIndex(index)}
+                          type="button"
+                        >
+                          <img src={galleryImage.url} alt="" />
+                        </button>
+                      ))}
                     </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
+                  )}
+                </div>
+                <div className="menu-item-copy">
+                  <span className="eyebrow">Món ngon tại Mộc Nhiên Coffee</span>
+                  <h1>{item.name}</h1>
+                  {Boolean(item.bestSeller) && (
+                    <span className="best-seller-badge">Món bán chạy</span>
+                  )}
+                  <p className="menu-item-description">{item.description}</p>
+                  <p className="menu-item-price">
+                    {item.price.toLocaleString("vi-VN")}đ
+                  </p>
+                  <p className="menu-item-location">
+                    Thưởng thức tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.
+                  </p>
+                  <div className="menu-item-actions">
+                    <Link className="button" to="/visit">
+                      Ghé quán thưởng thức
+                    </Link>
+                    <Link className="text-link" to="/menu">
+                      ← Quay lại thực đơn
+                    </Link>
+                  </div>
+                </div>
+              </article>
+              <section
+                className="menu-item-introduction"
+                aria-labelledby="menu-introduction-heading"
+              >
+                <span className="eyebrow">Câu chuyện hương vị</span>
+                <h2 id="menu-introduction-heading">Giới thiệu về {item.name}</h2>
+                <p>{introduction}</p>
+              </section>
+              <MenuReviews
+                menuId={item.id}
+                menuName={item.name}
+                onReviewsChange={setLatestReviewState}
+              />
+              {user?.role === "admin" && bestSellerItems.length > 0 && (
+                <section
+                  className="best-seller-recommendations"
+                  aria-labelledby="best-seller-heading"
+                >
+                  <div className="best-seller-heading">
+                    <div>
+                      <span className="eyebrow">Được yêu thích tại Mộc</span>
+                      <h2 id="best-seller-heading">Món bán chạy</h2>
+                    </div>
+                    <Link className="text-link" to="/menu">
+                      Xem toàn bộ thực đơn →
+                    </Link>
+                  </div>
+                  <div className="best-seller-grid">
+                    {bestSellerItems.map((recommendedItem) => (
+                      <Link
+                        className="best-seller-card"
+                        key={recommendedItem.id}
+                        to={getMenuItemPath(recommendedItem)}
+                      >
+                        <img
+                          src={recommendedItem.image}
+                          alt={recommendedItem.imageAlt}
+                          loading="lazy"
+                        />
+                        <div>
+                          <span className="best-seller-badge">Bán chạy</span>
+                          <h3>{recommendedItem.name}</h3>
+                          <span className="price">
+                            {recommendedItem.price.toLocaleString("vi-VN")}đ
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+            {user?.role === "admin" && (
+              <aside className="menu-item-admin-panel" aria-label="Quản trị sản phẩm">
+                <span className="admin-panel-icon" aria-hidden="true">
+                  ✎
+                </span>
+                <span className="eyebrow">Quản trị</span>
+                <h2>Chỉnh sửa sản phẩm</h2>
+                <p>
+                  Cập nhật tên món, danh mục, giá, hình ảnh và nội dung giới
+                  thiệu ngay trong trang quản lý.
+                </p>
+                <Link
+                  className="button"
+                  to={`/admin?edit=${encodeURIComponent(item.id)}#admin-product-form`}
+                >
+                  Chỉnh sửa món này
+                </Link>
+                <span className="menu-item-admin-note">
+                  Chỉ quản trị viên mới nhìn thấy khu vực này.
+                </span>
+              </aside>
+            )}
+            {user?.role !== "admin" && (
+              <MenuItemSidebar
+                products={suggestedItems}
+                reviewState={latestReviewState}
+              />
+            )}
+          </div>
         </div>
       </section>
     </>

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { fetchApi, useApiResource } from "./api.js";
 import { getMenuCategoryLabel, MENU_CATEGORIES } from "./menuCategories.js";
 import { getMenuItemPath } from "./menuSlug.js";
@@ -58,7 +58,13 @@ function ProductPreview({ product }) {
 }
 
 export default function AdminMenuSection() {
-  const { data: products, setData: setProducts, loading, error } = useApiResource("/menu");
+  const {
+    data: products,
+    setData: setProducts,
+    loading,
+    error,
+  } = useApiResource("/menu");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [product, setProduct] = useState(EMPTY_PRODUCT);
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
@@ -85,6 +91,7 @@ export default function AdminMenuSection() {
   }
 
   function startEditing(item) {
+    setSearchParams({ edit: String(item.id) }, { replace: true });
     setEditingProductId(item.id);
     setProduct({
       name: item.name,
@@ -104,11 +111,26 @@ export default function AdminMenuSection() {
   }
 
   function cancelEditing() {
+    setSearchParams({}, { replace: true });
     setEditingProductId(null);
     setProduct(EMPTY_PRODUCT);
     setFormError("");
     setSuccess("");
   }
+
+  useEffect(() => {
+    const requestedId = searchParams.get("edit");
+    if (loading || error || !requestedId || editingProductId !== null) return;
+
+    const requestedProduct = products.find(
+      (item) => String(item.id) === requestedId,
+    );
+    if (requestedProduct) {
+      startEditing(requestedProduct);
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [editingProductId, error, loading, products, searchParams, setSearchParams]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -137,6 +159,7 @@ export default function AdminMenuSection() {
         setProducts((current) => [...current, savedProduct]);
       }
       setEditingProductId(null);
+      setSearchParams({}, { replace: true });
       setProduct(EMPTY_PRODUCT);
       setSuccess(
         editingProductId
