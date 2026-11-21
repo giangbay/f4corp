@@ -382,7 +382,7 @@ function MenuPage() {
         <div className="container">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">Từ quầy bar nhà Mộc</span>
+              <span className="eyebrow">Từ quầy bar nhà Mộc 448</span>
               <h1>Món quen, vị thương.</h1>
             </div>
             <p>
