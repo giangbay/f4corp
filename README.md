@@ -50,8 +50,9 @@ npm start
   nhập đều có thể đăng ký. Bảng lịch có thể xem công khai.
 - Trang `/admin` có điều hướng quản trị và form đăng món mới, xem trước ảnh,
   giới thiệu chi tiết từ 1.001 ký tự, thư viện đúng 3 ảnh, danh sách món hiện
-  tại và tùy chọn đánh dấu món bán chạy. Món được đánh dấu sẽ được gợi ý trên
-  trang chi tiết các món khác.
+  tại, chỉnh sửa sản phẩm và tùy chọn đánh dấu món bán chạy. Sản phẩm được
+  phân vào một trong bốn danh mục: nước ép, cà phê, sinh tố hoặc trà sữa. Món
+  được đánh dấu bán chạy sẽ được gợi ý trên trang chi tiết các món khác.
 - Trang chi tiết món hiển thị phần giới thiệu, điểm trung bình và nhận xét của
   khách hàng. Tài khoản khách hàng đã đăng nhập có thể gửi hoặc cập nhật một
   đánh giá cho mỗi món; tài khoản chưa đăng nhập chỉ xem được đánh giá.
@@ -76,8 +77,9 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
 - `POST /api/menu/:menuId/reviews` (yêu cầu phiên khách hàng; gửi hoặc cập nhật
   điểm 1–5 sao và nhận xét)
 - `POST /api/admin/menu` (yêu cầu phiên admin; tạo món với `name`,
-  `description`, `introduction` dài ít nhất 1.001 ký tự, `price`,
+  `category`, `description`, `introduction` dài ít nhất 1.001 ký tự, `price`,
   `galleryImages` gồm đúng 3 URL/alt ảnh khác nhau và `bestSeller`)
+- `PUT /api/admin/menu/:menuId` (yêu cầu phiên admin; cập nhật thông tin món)
 - Mỗi món có trang riêng tại `/menu/<ten-mon>-<id>`; `/sitemap.xml` liệt kê
   các trang món để công cụ tìm kiếm thu thập.
 - `GET /api/locations`

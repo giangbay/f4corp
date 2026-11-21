@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchApi, useApiResource } from "./api.js";
+import { getMenuCategoryLabel, MENU_CATEGORIES } from "./menuCategories.js";
 import { getMenuItemPath } from "./menuSlug.js";
 
 const EMPTY_PRODUCT = {
   name: "",
+  category: "coffee",
   description: "",
   introduction: "",
   price: "",
@@ -61,6 +63,7 @@ export default function AdminMenuSection() {
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingProductId, setEditingProductId] = useState(null);
 
   function updateField(event) {
     const { name, value, checked, type } = event.target;
@@ -81,6 +84,32 @@ export default function AdminMenuSection() {
     }));
   }
 
+  function startEditing(item) {
+    setEditingProductId(item.id);
+    setProduct({
+      name: item.name,
+      category: item.category,
+      description: item.description,
+      introduction: item.introduction,
+      price: String(item.price),
+      galleryImages: item.galleryImages.map((image) => ({ ...image })),
+      bestSeller: Boolean(item.bestSeller),
+    });
+    setFormError("");
+    setSuccess("");
+    document.getElementById("admin-product-form")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function cancelEditing() {
+    setEditingProductId(null);
+    setProduct(EMPTY_PRODUCT);
+    setFormError("");
+    setSuccess("");
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
@@ -88,17 +117,32 @@ export default function AdminMenuSection() {
     setIsSubmitting(true);
 
     try {
-      const createdProduct = await fetchApi("/admin/menu", {
-        method: "POST",
+      const savedProduct = await fetchApi(
+        editingProductId ? `/admin/menu/${editingProductId}` : "/admin/menu",
+        {
+        method: editingProductId ? "PUT" : "POST",
         body: JSON.stringify({
           ...product,
           introduction: product.introduction.trim(),
           price: Number(product.price),
         }),
       });
-      setProducts((current) => [...current, createdProduct]);
+      if (editingProductId) {
+        setProducts((current) =>
+          current.map((item) =>
+            item.id === savedProduct.id ? savedProduct : item,
+          ),
+        );
+      } else {
+        setProducts((current) => [...current, savedProduct]);
+      }
+      setEditingProductId(null);
       setProduct(EMPTY_PRODUCT);
-      setSuccess(`Đã đăng "${createdProduct.name}" lên thực đơn.`);
+      setSuccess(
+        editingProductId
+          ? `Đã cập nhật "${savedProduct.name}".`
+          : `Đã đăng "${savedProduct.name}" lên thực đơn.`,
+      );
     } catch (requestError) {
       setFormError(requestError.message);
     } finally {
@@ -111,10 +155,11 @@ export default function AdminMenuSection() {
       <div className="admin-menu-heading">
         <div>
           <span className="eyebrow">Thực đơn Mộc Nhiên</span>
-          <h2>Thêm món mới</h2>
+          <h2>{editingProductId ? "Chỉnh sửa sản phẩm" : "Thêm món mới"}</h2>
           <p>
-            Tạo trang riêng cho món và chọn món bán chạy để giới thiệu ở trang
-            chi tiết.
+            {editingProductId
+              ? "Cập nhật danh mục, hình ảnh và nội dung hiển thị của món."
+              : "Tạo trang riêng cho món, phân loại thực đơn và chọn món bán chạy để giới thiệu ở trang chi tiết."}
           </p>
         </div>
         <span className="admin-menu-total">
@@ -123,12 +168,20 @@ export default function AdminMenuSection() {
       </div>
 
       <div className="admin-menu-layout">
-        <form className="admin-product-form" onSubmit={handleSubmit}>
+        <form
+          className="admin-product-form"
+          id="admin-product-form"
+          onSubmit={handleSubmit}
+        >
           <div className="admin-product-form-heading">
             <span className="admin-form-step">01</span>
             <div>
-              <h3>Thông tin sản phẩm</h3>
-              <p>Điền nội dung sẽ hiển thị công khai trên menu.</p>
+              <h3>{editingProductId ? "Chỉnh sửa sản phẩm" : "Thông tin sản phẩm"}</h3>
+              <p>
+                {editingProductId
+                  ? "Cập nhật thông tin sẽ hiển thị công khai trên menu."
+                  : "Điền nội dung sẽ hiển thị công khai trên menu."}
+              </p>
             </div>
           </div>
           <label htmlFor="product-name">Tên món</label>
@@ -142,6 +195,21 @@ export default function AdminMenuSection() {
             placeholder="Ví dụ: Cà phê cốt dừa"
             required
           />
+
+          <label htmlFor="product-category">Danh mục</label>
+          <select
+            id="product-category"
+            name="category"
+            value={product.category}
+            onChange={updateField}
+            required
+          >
+            {MENU_CATEGORIES.map((category) => (
+              <option key={category.value} value={category.value}>
+                {category.label}
+              </option>
+            ))}
+          </select>
 
           <label htmlFor="product-description">Mô tả món</label>
           <textarea
@@ -249,9 +317,27 @@ export default function AdminMenuSection() {
               {success}
             </p>
           )}
-          <button className="button admin-product-submit" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Đang đăng món…" : "Đăng lên thực đơn"}
-          </button>
+          <div className="admin-product-form-actions">
+            <button className="button admin-product-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting
+                ? editingProductId
+                  ? "Đang lưu…"
+                  : "Đang đăng món…"
+                : editingProductId
+                  ? "Lưu thay đổi"
+                  : "Đăng lên thực đơn"}
+            </button>
+            {editingProductId && (
+              <button
+                className="admin-product-cancel"
+                type="button"
+                onClick={cancelEditing}
+                disabled={isSubmitting}
+              >
+                Hủy chỉnh sửa
+              </button>
+            )}
+          </div>
         </form>
 
         <div className="admin-product-list">
@@ -279,6 +365,9 @@ export default function AdminMenuSection() {
                 <div>
                   <div className="admin-product-row-title">
                     <strong>{item.name}</strong>
+                    <span className="admin-product-category">
+                      {getMenuCategoryLabel(item.category)}
+                    </span>
                     {Boolean(item.bestSeller) && (
                       <span className="best-seller-badge">Bán chạy</span>
                     )}
@@ -287,13 +376,23 @@ export default function AdminMenuSection() {
                     {item.price.toLocaleString("vi-VN")}đ
                   </span>
                 </div>
-                <Link
-                  className="admin-product-view"
-                  to={getMenuItemPath(item)}
-                  aria-label={`Xem trang ${item.name}`}
-                >
-                  ↗
-                </Link>
+                <div className="admin-product-row-actions">
+                  <button
+                    className="admin-product-edit"
+                    type="button"
+                    onClick={() => startEditing(item)}
+                    aria-label={`Chỉnh sửa ${item.name}`}
+                  >
+                    Sửa
+                  </button>
+                  <Link
+                    className="admin-product-view"
+                    to={getMenuItemPath(item)}
+                    aria-label={`Xem trang ${item.name}`}
+                  >
+                    ↗
+                  </Link>
+                </div>
               </article>
             ))}
         </div>

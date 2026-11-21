@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useApiResource } from "../api.js";
 import ResourceStatus from "../components/ResourceStatus.jsx";
 import CommentsSection from "./CommentsSection.jsx";
+import { getMenuCategoryLabel, MENU_CATEGORIES } from "../menuCategories.js";
 import { getMenuItemPath } from "../menuSlug.js";
 
 function MenuCard({ item }) {
@@ -33,6 +35,11 @@ function MenuCard({ item }) {
 
 export default function MenuPage() {
   const { data: items, loading, error } = useApiResource("/menu");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const visibleItems =
+    selectedCategory === "all"
+      ? items
+      : items.filter((item) => item.category === selectedCategory);
 
   return (
     <>
@@ -50,11 +57,46 @@ export default function MenuPage() {
           </div>
           <ResourceStatus loading={loading} error={error} />
           {!loading && !error && (
-            <div className="menu-grid">
-              {items.map((item) => (
-                <MenuCard item={item} key={item.id} />
-              ))}
-            </div>
+            <>
+              <nav className="menu-category-nav" aria-label="Danh mục thực đơn">
+                <button
+                  type="button"
+                  aria-pressed={selectedCategory === "all"}
+                  onClick={() => setSelectedCategory("all")}
+                >
+                  Tất cả <span>{items.length}</span>
+                </button>
+                {MENU_CATEGORIES.map((category) => {
+                  const count = items.filter(
+                    (item) => item.category === category.value,
+                  ).length;
+                  return (
+                    <button
+                      type="button"
+                      key={category.value}
+                      aria-pressed={selectedCategory === category.value}
+                      onClick={() => setSelectedCategory(category.value)}
+                    >
+                      {category.label} <span>{count}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+              {visibleItems.length > 0 ? (
+                <div className="menu-grid">
+                  {visibleItems.map((item) => (
+                    <MenuCard item={item} key={item.id} />
+                  ))}
+                </div>
+              ) : (
+                <div className="menu-category-empty">
+                  <span className="eyebrow">
+                    {getMenuCategoryLabel(selectedCategory)}
+                  </span>
+                  <p>Danh mục này đang được cập nhật. Mời bạn quay lại sau nhé.</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>

@@ -7,6 +7,7 @@ import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import { Server as SocketServer } from "socket.io";
 import { closeDatabase, database, execute, initializeDatabase, many, one } from "./database.js";
+import { MENU_CATEGORIES } from "../src/menuCategories.js";
 import { getMenuItemPath } from "../src/menuSlug.js";
 import {
   bootstrapAdmin,
@@ -87,6 +88,91 @@ const chatWriteLimiter = rateLimit({
 const asyncRoute = (handler) => (request, response, next) => {
   Promise.resolve(handler(request, response, next)).catch(next);
 };
+
+const menuItemSelect = `
+  SELECT id, name, category, description, introduction, price, image,
+    image_alt AS imageAlt, gallery_images AS galleryImages,
+    best_seller AS bestSeller
+  FROM menu_items
+`;
+
+function validateMenuItem(body) {
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const category = typeof body?.category === "string" ? body.category : "";
+  const description =
+    typeof body?.description === "string" ? body.description.trim() : "";
+  const introduction =
+    typeof body?.introduction === "string" ? body.introduction.trim() : "";
+  const price = body?.price;
+  const bestSeller = body?.bestSeller === true;
+  const galleryImages = body?.galleryImages;
+
+  if (name.length < 2 || name.length > 120) {
+    return { error: "Tên món cần có từ 2 đến 120 ký tự." };
+  }
+  if (!MENU_CATEGORIES.some((item) => item.value === category)) {
+    return { error: "Vui lòng chọn một trong bốn danh mục thực đơn." };
+  }
+  if (description.length < 2 || description.length > 500) {
+    return { error: "Mô tả cần có từ 2 đến 500 ký tự." };
+  }
+  if (introduction.length < 1001 || introduction.length > 5000) {
+    return { error: "Phần giới thiệu cần có ít nhất 1.001 và tối đa 5.000 ký tự." };
+  }
+  if (!Number.isSafeInteger(price) || price < 0 || price > 100_000_000) {
+    return { error: "Giá món cần là số nguyên từ 0 đến 100.000.000." };
+  }
+  if (!Array.isArray(galleryImages) || galleryImages.length !== 3) {
+    return { error: "Mỗi món cần có đúng 3 hình ảnh." };
+  }
+
+  const validatedGallery = [];
+  for (const galleryImage of galleryImages) {
+    const url =
+      typeof galleryImage?.url === "string" ? galleryImage.url.trim() : "";
+    const alt =
+      typeof galleryImage?.alt === "string" ? galleryImage.alt.trim() : "";
+    if (url.length > 1000 || alt.length < 2 || alt.length > 250) {
+      return { error: "Vui lòng nhập đủ đường dẫn và mô tả cho cả 3 hình ảnh." };
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { error: "Đường dẫn hình ảnh không hợp lệ." };
+    }
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      return { error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." };
+    }
+    validatedGallery.push({ url, alt });
+  }
+  if (new Set(validatedGallery.map(({ url }) => url)).size !== 3) {
+    return { error: "Ba hình ảnh cần có đường dẫn khác nhau." };
+  }
+
+  return {
+    value: {
+      name,
+      category,
+      description,
+      introduction,
+      price,
+      bestSeller,
+      galleryImages: validatedGallery,
+    },
+  };
+}
+
+function normalizeMenuItem(item) {
+  return {
+    ...item,
+    galleryImages:
+      typeof item.galleryImages === "string"
+        ? JSON.parse(item.galleryImages)
+        : item.galleryImages,
+  };
+}
 
 function setSessionCookie(response, token, expiresAt) {
   response.setHeader("Set-Cookie", sessionCookie(token, expiresAt, isProduction));
@@ -249,20 +335,14 @@ app.post("/api/auth/logout", requireAuth, asyncRoute(async (request, response) =
 
 app.get("/api/menu", asyncRoute(async (_request, response) => {
   const items = await many(`
-    SELECT id, name, description, introduction, price, image,
+    SELECT id, name, category, description, introduction, price, image,
       image_alt AS imageAlt,
       gallery_images AS galleryImages,
       best_seller AS bestSeller
     FROM menu_items
     ORDER BY sort_order, id
   `);
-  response.json(items.map((item) => ({
-    ...item,
-    galleryImages:
-      typeof item.galleryImages === "string"
-        ? JSON.parse(item.galleryImages)
-        : item.galleryImages,
-  })));
+  response.json(items.map(normalizeMenuItem));
 }));
 
 app.get(
@@ -377,85 +457,39 @@ app.post(
   requireAuth,
   requireAdmin,
   asyncRoute(async (request, response) => {
-    const name =
-      typeof request.body?.name === "string" ? request.body.name.trim() : "";
-    const description =
-      typeof request.body?.description === "string"
-        ? request.body.description.trim()
-        : "";
-    const introduction =
-      typeof request.body?.introduction === "string"
-        ? request.body.introduction.trim()
-        : "";
-    const galleryImages = request.body?.galleryImages;
-    const price = request.body?.price;
-    const bestSeller = request.body?.bestSeller === true;
-
-    if (name.length < 2 || name.length > 120) {
-      response.status(400).json({ error: "Tên món cần có từ 2 đến 120 ký tự." });
+    const validation = validateMenuItem(request.body);
+    if (validation.error) {
+      response.status(400).json({ error: validation.error });
       return;
     }
-    if (description.length < 2 || description.length > 500) {
-      response.status(400).json({ error: "Mô tả cần có từ 2 đến 500 ký tự." });
-      return;
-    }
-    if (introduction.length < 1001 || introduction.length > 5000) {
-      response.status(400).json({ error: "Phần giới thiệu cần có ít nhất 1.001 và tối đa 5.000 ký tự." });
-      return;
-    }
-    if (!Number.isSafeInteger(price) || price < 0 || price > 100_000_000) {
-      response.status(400).json({ error: "Giá món cần là số nguyên từ 0 đến 100.000.000." });
-      return;
-    }
-    if (!Array.isArray(galleryImages) || galleryImages.length !== 3) {
-      response.status(400).json({ error: "Mỗi món cần có đúng 3 hình ảnh." });
-      return;
-    }
-    const validatedGallery = [];
-    for (const galleryImage of galleryImages) {
-      const url =
-        typeof galleryImage?.url === "string" ? galleryImage.url.trim() : "";
-      const alt =
-        typeof galleryImage?.alt === "string" ? galleryImage.alt.trim() : "";
-      if (url.length > 1000 || alt.length < 2 || alt.length > 250) {
-        response.status(400).json({ error: "Vui lòng nhập đủ đường dẫn và mô tả cho cả 3 hình ảnh." });
-        return;
-      }
-      let parsedUrl;
-      try {
-        parsedUrl = new URL(url);
-      } catch {
-        response.status(400).json({ error: "Đường dẫn hình ảnh không hợp lệ." });
-        return;
-      }
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        response.status(400).json({ error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." });
-        return;
-      }
-      validatedGallery.push({ url, alt });
-    }
-    if (new Set(validatedGallery.map(({ url }) => url)).size !== 3) {
-      response.status(400).json({ error: "Ba hình ảnh cần có đường dẫn khác nhau." });
-      return;
-    }
-    const [mainImage] = validatedGallery;
+    const {
+      name,
+      category,
+      description,
+      introduction,
+      price,
+      bestSeller,
+      galleryImages,
+    } = validation.value;
+    const [mainImage] = galleryImages;
 
     let result;
     try {
       result = await execute(`
         INSERT INTO menu_items
-          (name, description, introduction, price, image, image_alt,
+          (name, category, description, introduction, price, image, image_alt,
             gallery_images, best_seller, sort_order)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
         FROM menu_items
       `, [
         name,
+        category,
         description,
         introduction,
         price,
         mainImage.url,
         mainImage.alt,
-        JSON.stringify(validatedGallery),
+        JSON.stringify(galleryImages),
         bestSeller,
       ]);
     } catch (error) {
@@ -466,20 +500,71 @@ app.post(
       throw error;
     }
 
-    const item = await one(`
-      SELECT id, name, description, introduction, price, image,
-        image_alt AS imageAlt, gallery_images AS galleryImages,
-        best_seller AS bestSeller
-      FROM menu_items
-      WHERE id = ?
-    `, [result.insertId]);
-    response.status(201).json({
-      ...item,
-      galleryImages:
-        typeof item.galleryImages === "string"
-          ? JSON.parse(item.galleryImages)
-          : item.galleryImages,
-    });
+    const item = await one(`${menuItemSelect} WHERE id = ?`, [result.insertId]);
+    response.status(201).json(normalizeMenuItem(item));
+  }),
+);
+
+app.put(
+  "/api/admin/menu/:menuId",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const menuId = Number(request.params.menuId);
+    if (!Number.isSafeInteger(menuId) || menuId < 1) {
+      response.status(400).json({ error: "Món ăn không hợp lệ." });
+      return;
+    }
+    const existing = await one("SELECT id FROM menu_items WHERE id = ?", [menuId]);
+    if (!existing) {
+      response.status(404).json({ error: "Không tìm thấy món ăn." });
+      return;
+    }
+
+    const validation = validateMenuItem(request.body);
+    if (validation.error) {
+      response.status(400).json({ error: validation.error });
+      return;
+    }
+    const {
+      name,
+      category,
+      description,
+      introduction,
+      price,
+      bestSeller,
+      galleryImages,
+    } = validation.value;
+    const [mainImage] = galleryImages;
+    try {
+      await execute(`
+        UPDATE menu_items
+        SET name = ?, category = ?, description = ?, introduction = ?,
+          price = ?, image = ?, image_alt = ?, gallery_images = ?,
+          best_seller = ?
+        WHERE id = ?
+      `, [
+        name,
+        category,
+        description,
+        introduction,
+        price,
+        mainImage.url,
+        mainImage.alt,
+        JSON.stringify(galleryImages),
+        bestSeller,
+        menuId,
+      ]);
+    } catch (error) {
+      if (error.code === "ER_DUP_ENTRY") {
+        response.status(409).json({ error: "Tên món này đã có trong thực đơn." });
+        return;
+      }
+      throw error;
+    }
+
+    const updatedItem = await one(`${menuItemSelect} WHERE id = ?`, [menuId]);
+    response.json(normalizeMenuItem(updatedItem));
   }),
 );
 
