@@ -23,7 +23,7 @@ export default function MenuItemPage() {
 
   const title = `${item.name} – Thực đơn | Mộc Nhiên Coffee`;
   const bestSellerItems = items.filter(
-    (menuItem) => menuItem.bestSeller && menuItem.id !== item.id,
+    (menuItem) => Boolean(menuItem.bestSeller) && menuItem.id !== item.id,
   );
   const description = `${item.description} Thưởng thức ${item.name} tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.`;
   const structuredData = {
@@ -69,7 +69,9 @@ export default function MenuItemPage() {
             <div className="menu-item-copy">
               <span className="eyebrow">Món ngon tại Mộc Nhiên Coffee</span>
               <h1>{item.name}</h1>
-              {item.bestSeller && <span className="best-seller-badge">Món bán chạy</span>}
+              {Boolean(item.bestSeller) && (
+                <span className="best-seller-badge">Món bán chạy</span>
+              )}
               <p className="menu-item-description">{item.description}</p>
               <p className="menu-item-price">
                 {item.price.toLocaleString("vi-VN")}đ

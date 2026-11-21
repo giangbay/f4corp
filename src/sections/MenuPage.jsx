@@ -17,7 +17,9 @@ function MenuCard({ item }) {
           <div className="menu-card-title">
             <div className="menu-card-name">
               <h2>{item.name}</h2>
-              {item.bestSeller && <span className="best-seller-badge">Bán chạy</span>}
+              {Boolean(item.bestSeller) && (
+                <span className="best-seller-badge">Bán chạy</span>
+              )}
             </div>
             <span className="price">{item.price.toLocaleString("vi-VN")}đ</span>
           </div>

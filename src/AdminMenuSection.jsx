@@ -215,7 +215,7 @@ export default function AdminMenuSection() {
                 <div>
                   <div className="admin-product-row-title">
                     <strong>{item.name}</strong>
-                    {item.bestSeller && (
+                    {Boolean(item.bestSeller) && (
                       <span className="best-seller-badge">Bán chạy</span>
                     )}
                   </div>
