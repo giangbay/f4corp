@@ -13,6 +13,7 @@ import { useAuth } from "./AuthContext.jsx";
 import AdminPage from "./AdminPage.jsx";
 import ChatPage from "./ChatPage.jsx";
 import LoginPage from "./LoginPage.jsx";
+import StaffSchedulePage from "./StaffSchedulePage.jsx";
 
 function ScrollProgress() {
   useEffect(() => {
@@ -146,7 +147,7 @@ function SiteHeader() {
           >
             Không gian
           </Link>
-          <NavLink to="/chat">Bảng chat</NavLink>
+          <NavLink to="/shifts">Đăng ký giờ làm</NavLink>
           {user?.role === "admin" && <NavLink to="/admin">Quản trị</NavLink>}
           {user ? (
             <button
@@ -555,6 +556,7 @@ export default function App() {
           <Route path="/visit" element={<VisitPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="/shifts" element={<StaffSchedulePage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

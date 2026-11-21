@@ -14,7 +14,12 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!loading && user) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/chat"} replace />;
+    return (
+      <Navigate
+        to={user.role === "admin" ? "/admin" : user.role === "staff" ? "/shifts" : "/chat"}
+        replace
+      />
+    );
   }
 
   async function handleSubmit(event) {
@@ -27,7 +32,12 @@ export default function LoginPage() {
         : await signIn({ email, password });
       const destination = location.state?.from;
       navigate(
-        destination ?? (signedInUser.role === "admin" ? "/admin" : "/chat"),
+        destination ??
+          (signedInUser.role === "admin"
+            ? "/admin"
+            : signedInUser.role === "staff"
+              ? "/shifts"
+              : "/chat"),
         { replace: true },
       );
     } catch (requestError) {

@@ -17,6 +17,7 @@ import {
   readSessionToken,
   requireAdmin,
   requireAuth,
+  requireStaff,
   sessionCookie,
   verifyPassword,
 } from "./auth.js";
@@ -308,6 +309,80 @@ app.post(
   }),
 );
 
+app.get("/api/staff-shifts", asyncRoute(async (_request, response) => {
+  response.setHeader("Cache-Control", "no-store");
+  const shifts = await many(`
+    SELECT staff_shifts.id, staff_shifts.user_id AS userId,
+      users.name AS staffName,
+      DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
+      TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
+      TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
+      staff_shifts.note, staff_shifts.created_at AS createdAt
+    FROM staff_shifts
+    JOIN users ON users.id = staff_shifts.user_id
+    ORDER BY staff_shifts.shift_date, staff_shifts.start_time, staff_shifts.id
+    LIMIT 200
+  `);
+  response.json(shifts);
+}));
+
+app.post(
+  "/api/staff-shifts",
+  chatWriteLimiter,
+  requireAuth,
+  requireStaff,
+  asyncRoute(async (request, response) => {
+    const shiftDate =
+      typeof request.body?.shiftDate === "string" ? request.body.shiftDate : "";
+    const startTime =
+      typeof request.body?.startTime === "string" ? request.body.startTime : "";
+    const endTime =
+      typeof request.body?.endTime === "string" ? request.body.endTime : "";
+    const note =
+      typeof request.body?.note === "string" ? request.body.note.trim() : "";
+    const parsedDate = new Date(`${shiftDate}T00:00:00.000Z`);
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) ||
+      !Number.isFinite(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== shiftDate
+    ) {
+      response.status(400).json({ error: "Vui lòng chọn ngày đăng ký hợp lệ." });
+      return;
+    }
+    if (
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) ||
+      endTime <= startTime
+    ) {
+      response.status(400).json({ error: "Giờ kết thúc phải sau giờ bắt đầu." });
+      return;
+    }
+    if (note.length > 300) {
+      response.status(400).json({ error: "Ghi chú tối đa 300 ký tự." });
+      return;
+    }
+
+    const result = await execute(`
+      INSERT INTO staff_shifts (user_id, shift_date, start_time, end_time, note)
+      VALUES (?, ?, ?, ?, ?)
+    `, [request.user.id, shiftDate, startTime, endTime, note]);
+    const shift = await one(`
+      SELECT staff_shifts.id, staff_shifts.user_id AS userId,
+        users.name AS staffName,
+        DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
+        TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
+        TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
+        staff_shifts.note, staff_shifts.created_at AS createdAt
+      FROM staff_shifts
+      JOIN users ON users.id = staff_shifts.user_id
+      WHERE staff_shifts.id = ?
+    `, [result.insertId]);
+    io.emit("staff-shift:created", shift);
+    response.status(201).json(shift);
+  }),
+);
+
 app.get("/api/posts", asyncRoute(async (_request, response) => {
   const posts = await many(`
     SELECT id
@@ -420,6 +495,58 @@ app.get(
       ORDER BY id DESC
     `);
     response.json(users);
+  }),
+);
+
+app.post(
+  "/api/admin/staff",
+  requireAuth,
+  requireAdmin,
+  registrationLimiter,
+  asyncRoute(async (request, response) => {
+    const name = typeof request.body?.name === "string" ? request.body.name.trim() : "";
+    const email =
+      typeof request.body?.email === "string"
+        ? request.body.email.trim().toLowerCase()
+        : "";
+    const password =
+      typeof request.body?.password === "string" ? request.body.password : "";
+
+    if (name.length < 2 || name.length > 60) {
+      response.status(400).json({ error: "Tên cần có từ 2 đến 60 ký tự." });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      response.status(400).json({ error: "Vui lòng nhập email hợp lệ." });
+      return;
+    }
+    if (password.length < 10 || password.length > 128) {
+      response.status(400).json({ error: "Mật khẩu cần có từ 10 đến 128 ký tự." });
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    let result;
+    try {
+      result = await execute(`
+        INSERT INTO users (name, email, role, password_hash)
+        VALUES (?, ?, 'staff', ?)
+      `, [name, email, passwordHash]);
+    } catch (error) {
+      if (error.code === "ER_DUP_ENTRY") {
+        response.status(409).json({ error: "Email này đã được đăng ký." });
+        return;
+      }
+      throw error;
+    }
+
+    response.setHeader("Cache-Control", "no-store");
+    const staff = await one(`
+      SELECT id, name, email, role, created_at AS createdAt
+      FROM users
+      WHERE id = ?
+    `, [result.insertId]);
+    response.status(201).json(staff);
   }),
 );
 

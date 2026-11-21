@@ -93,6 +93,14 @@ export function requireAdmin(request, response, next) {
   next();
 }
 
+export function requireStaff(request, response, next) {
+  if (request.user?.role !== "staff") {
+    response.status(403).json({ error: "Chức năng này chỉ dành cho nhân viên." });
+    return;
+  }
+  next();
+}
+
 export function sessionCookie(token, expiresAt, secure) {
   const maxAge = Math.max(0, expiresAt - Date.now());
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAge / 1000)}${secure ? "; Secure" : ""}`;

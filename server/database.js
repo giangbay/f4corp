@@ -68,6 +68,19 @@ export async function initializeDatabase() {
       INDEX sessions_expiry_idx (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+    CREATE TABLE IF NOT EXISTS staff_shifts (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      shift_date DATE NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      note VARCHAR(300) NOT NULL DEFAULT '',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT staff_shifts_user_fk FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+      INDEX staff_shifts_date_idx (shift_date, start_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
     CREATE TABLE IF NOT EXISTS posts (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
