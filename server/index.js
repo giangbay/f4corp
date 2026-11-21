@@ -249,13 +249,121 @@ app.post("/api/auth/logout", requireAuth, asyncRoute(async (request, response) =
 
 app.get("/api/menu", asyncRoute(async (_request, response) => {
   const items = await many(`
-    SELECT id, name, description, price, image, image_alt AS imageAlt,
+    SELECT id, name, description, introduction, price, image,
+      image_alt AS imageAlt,
       best_seller AS bestSeller
     FROM menu_items
     ORDER BY sort_order, id
   `);
   response.json(items);
 }));
+
+app.get(
+  "/api/menu/:menuId/reviews",
+  asyncRoute(async (request, response) => {
+    const menuId = Number(request.params.menuId);
+    if (!Number.isSafeInteger(menuId) || menuId < 1) {
+      response.status(400).json({ error: "Món ăn không hợp lệ." });
+      return;
+    }
+
+    const menuItem = await one("SELECT id FROM menu_items WHERE id = ?", [menuId]);
+    if (!menuItem) {
+      response.status(404).json({ error: "Không tìm thấy món ăn." });
+      return;
+    }
+
+    const [reviews, summary, currentUser] = await Promise.all([
+      many(`
+        SELECT menu_reviews.id, menu_reviews.rating, menu_reviews.content,
+          menu_reviews.created_at AS createdAt,
+          users.name AS authorName
+        FROM menu_reviews
+        JOIN users ON users.id = menu_reviews.user_id
+        WHERE menu_reviews.menu_item_id = ?
+        ORDER BY menu_reviews.created_at DESC, menu_reviews.id DESC
+        LIMIT 50
+      `, [menuId]),
+      one(`
+        SELECT COUNT(*) AS totalReviews, AVG(rating) AS averageRating
+        FROM menu_reviews
+        WHERE menu_item_id = ?
+      `, [menuId]),
+      getSessionUser(readSessionToken(request)),
+    ]);
+
+    const ownReview = currentUser?.role === "customer"
+      ? await one(`
+          SELECT id, rating, content
+          FROM menu_reviews
+          WHERE menu_item_id = ? AND user_id = ?
+        `, [menuId, currentUser.id])
+      : null;
+
+    response.setHeader("Cache-Control", "no-store");
+    response.json({
+      reviews,
+      totalReviews: Number(summary.totalReviews),
+      averageRating: summary.averageRating
+        ? Number(summary.averageRating)
+        : 0,
+      ownReview,
+    });
+  }),
+);
+
+app.post(
+  "/api/menu/:menuId/reviews",
+  chatWriteLimiter,
+  requireAuth,
+  asyncRoute(async (request, response) => {
+    if (request.user.role !== "customer") {
+      response.status(403).json({ error: "Chỉ tài khoản khách hàng mới có thể đánh giá món." });
+      return;
+    }
+
+    const menuId = Number(request.params.menuId);
+    if (!Number.isSafeInteger(menuId) || menuId < 1) {
+      response.status(400).json({ error: "Món ăn không hợp lệ." });
+      return;
+    }
+    const menuItem = await one("SELECT id FROM menu_items WHERE id = ?", [menuId]);
+    if (!menuItem) {
+      response.status(404).json({ error: "Không tìm thấy món ăn." });
+      return;
+    }
+
+    const rating = request.body?.rating;
+    const content =
+      typeof request.body?.content === "string" ? request.body.content.trim() : "";
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      response.status(400).json({ error: "Điểm đánh giá cần từ 1 đến 5 sao." });
+      return;
+    }
+    if (content.length < 3 || content.length > 600) {
+      response.status(400).json({ error: "Nhận xét cần có từ 3 đến 600 ký tự." });
+      return;
+    }
+
+    await execute(`
+      INSERT INTO menu_reviews (menu_item_id, user_id, rating, content)
+      VALUES (?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        rating = VALUES(rating),
+        content = VALUES(content),
+        updated_at = CURRENT_TIMESTAMP
+    `, [menuId, request.user.id, rating, content]);
+
+    const review = await one(`
+      SELECT menu_reviews.id, menu_reviews.rating, menu_reviews.content,
+        menu_reviews.created_at AS createdAt, users.name AS authorName
+      FROM menu_reviews
+      JOIN users ON users.id = menu_reviews.user_id
+      WHERE menu_reviews.menu_item_id = ? AND menu_reviews.user_id = ?
+    `, [menuId, request.user.id]);
+    response.status(201).json(review);
+  }),
+);
 
 app.post(
   "/api/admin/menu",
@@ -267,6 +375,10 @@ app.post(
     const description =
       typeof request.body?.description === "string"
         ? request.body.description.trim()
+        : "";
+    const introduction =
+      typeof request.body?.introduction === "string"
+        ? request.body.introduction.trim()
         : "";
     const image =
       typeof request.body?.image === "string" ? request.body.image.trim() : "";
@@ -283,6 +395,10 @@ app.post(
     }
     if (description.length < 2 || description.length > 500) {
       response.status(400).json({ error: "Mô tả cần có từ 2 đến 500 ký tự." });
+      return;
+    }
+    if (introduction.length < 20 || introduction.length > 3000) {
+      response.status(400).json({ error: "Phần giới thiệu cần có từ 20 đến 3.000 ký tự." });
       return;
     }
     if (!Number.isSafeInteger(price) || price < 0 || price > 100_000_000) {
@@ -309,10 +425,11 @@ app.post(
     try {
       result = await execute(`
         INSERT INTO menu_items
-          (name, description, price, image, image_alt, best_seller, sort_order)
-        SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
+          (name, description, introduction, price, image, image_alt,
+            best_seller, sort_order)
+        SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
         FROM menu_items
-      `, [name, description, price, image, imageAlt, bestSeller]);
+      `, [name, description, introduction, price, image, imageAlt, bestSeller]);
     } catch (error) {
       if (error.code === "ER_DUP_ENTRY") {
         response.status(409).json({ error: "Tên món này đã có trong thực đơn." });
@@ -322,7 +439,8 @@ app.post(
     }
 
     const item = await one(`
-      SELECT id, name, description, price, image, image_alt AS imageAlt,
+      SELECT id, name, description, introduction, price, image,
+        image_alt AS imageAlt,
         best_seller AS bestSeller
       FROM menu_items
       WHERE id = ?

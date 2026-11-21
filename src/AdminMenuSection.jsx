@@ -6,6 +6,7 @@ import { getMenuItemPath } from "./menuSlug.js";
 const EMPTY_PRODUCT = {
   name: "",
   description: "",
+  introduction: "",
   price: "",
   image: "",
   imageAlt: "",
@@ -122,6 +123,22 @@ export default function AdminMenuSection() {
             placeholder="Hương vị, nguyên liệu hoặc điểm đặc biệt của món"
             required
           />
+
+          <label htmlFor="product-introduction">Giới thiệu chi tiết</label>
+          <textarea
+            id="product-introduction"
+            name="introduction"
+            value={product.introduction}
+            onChange={updateField}
+            minLength={20}
+            maxLength={3000}
+            rows={5}
+            placeholder="Kể rõ hơn về nguyên liệu, cách pha chế, hương vị và trải nghiệm của món"
+            required
+          />
+          <span className="admin-character-count">
+            {product.introduction.length}/3.000 ký tự
+          </span>
 
           <label htmlFor="product-price">Giá bán (đ)</label>
           <input

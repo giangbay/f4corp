@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useApiResource } from "../api.js";
+import MenuReviews from "../components/MenuReviews.jsx";
 import ResourceStatus from "../components/ResourceStatus.jsx";
 import SeoMetadata from "../components/SeoMetadata.jsx";
 import NotFoundPage from "./NotFoundPage.jsx";
@@ -22,15 +23,16 @@ export default function MenuItemPage() {
   if (!item) return <NotFoundPage />;
 
   const title = `${item.name} – Thực đơn | Mộc Nhiên Coffee`;
+  const introduction = item.introduction || item.description;
   const bestSellerItems = items.filter(
     (menuItem) => Boolean(menuItem.bestSeller) && menuItem.id !== item.id,
   );
-  const description = `${item.description} Thưởng thức ${item.name} tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.`;
+  const description = `${introduction} Thưởng thức ${item.name} tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.`;
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: item.name,
-    description: item.description,
+    description: introduction,
     image: item.image,
     offers: {
       "@type": "Offer",
@@ -89,6 +91,12 @@ export default function MenuItemPage() {
               </div>
             </div>
           </article>
+          <section className="menu-item-introduction" aria-labelledby="menu-introduction-heading">
+            <span className="eyebrow">Câu chuyện hương vị</span>
+            <h2 id="menu-introduction-heading">Giới thiệu về {item.name}</h2>
+            <p>{introduction}</p>
+          </section>
+          <MenuReviews menuId={item.id} menuName={item.name} />
           {bestSellerItems.length > 0 && (
             <section className="best-seller-recommendations" aria-labelledby="best-seller-heading">
               <div className="best-seller-heading">

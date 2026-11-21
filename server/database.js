@@ -43,6 +43,7 @@ export async function initializeDatabase() {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(120) NOT NULL UNIQUE,
       description VARCHAR(500) NOT NULL,
+      introduction TEXT NOT NULL,
       price INT UNSIGNED NOT NULL,
       image VARCHAR(1000) NOT NULL,
       image_alt VARCHAR(250) NOT NULL,
@@ -57,6 +58,23 @@ export async function initializeDatabase() {
       role ENUM('customer', 'staff', 'admin') NOT NULL DEFAULT 'customer',
       password_hash VARCHAR(255) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS menu_reviews (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      menu_item_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      rating TINYINT UNSIGNED NOT NULL,
+      content VARCHAR(600) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT menu_reviews_item_fk FOREIGN KEY (menu_item_id)
+        REFERENCES menu_items(id) ON DELETE CASCADE,
+      CONSTRAINT menu_reviews_user_fk FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY menu_reviews_item_user_unique (menu_item_id, user_id),
+      INDEX menu_reviews_item_created_idx (menu_item_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -153,6 +171,18 @@ export async function initializeDatabase() {
     );
   }
 
+  const [introductionColumn] = await database.query(
+    "SHOW COLUMNS FROM menu_items LIKE 'introduction'",
+  );
+  if (introductionColumn.length === 0) {
+    await database.query(
+      "ALTER TABLE menu_items ADD COLUMN introduction TEXT NOT NULL AFTER description",
+    );
+    await database.query(
+      "UPDATE menu_items SET introduction = description WHERE introduction = ''",
+    );
+  }
+
   const connection = await database.getConnection();
   try {
     await connection.beginTransaction();
@@ -162,11 +192,12 @@ export async function initializeDatabase() {
     };
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, best_seller, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (name, description, introduction, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         "Cà phê sữa đá",
         "Robusta rang vừa, sữa thơm, hậu vị đậm đà thân quen.",
+        "Cà phê sữa đá nhà Mộc bắt đầu từ những hạt Robusta được tuyển chọn và rang vừa để giữ trọn hương thơm tự nhiên. Cà phê được pha đậm, hòa cùng sữa thơm và đá mát, tạo nên vị ngọt dịu ở đầu lưỡi cùng hậu vị đậm đà thân quen. Một lựa chọn giản dị để bắt đầu ngày mới hoặc nhâm nhi trong buổi chiều Hà Nội.",
         39000,
         "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=800&q=85",
         "Cà phê sữa đá Việt Nam",
@@ -176,11 +207,12 @@ export async function initializeDatabase() {
     );
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, best_seller, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (name, description, introduction, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         "Latte dịu êm",
         "Espresso cân bằng cùng sữa tươi đánh mịn, thơm nhẹ nhàng.",
+        "Latte dịu êm kết hợp espresso được chiết xuất cân bằng với sữa tươi đánh mịn, tạo nên kết cấu mềm mượt và lớp bọt nhẹ nhàng. Hương cà phê vẫn rõ nét nhưng không quá đậm, quyện cùng vị sữa thơm béo vừa phải. Món ngon khi thưởng thức nóng, phù hợp cho những lúc bạn muốn chậm lại và tận hưởng một khoảng nghỉ nhỏ.",
         49000,
         "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=85",
         "Tách latte nóng với lớp bọt sữa mịn",
@@ -190,11 +222,12 @@ export async function initializeDatabase() {
     );
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, best_seller, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (name, description, introduction, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         "Matcha mây xanh",
         "Matcha thơm dịu, sữa mát lành và một lớp kem mềm mượt.",
+        "Matcha mây xanh mang sắc xanh dịu mắt cùng hương trà thanh nhẹ. Matcha được khuấy mịn rồi kết hợp với sữa mát lành và lớp kem mềm mượt phía trên, tạo nên nhiều tầng vị hài hòa: thơm trà, béo nhẹ và ngọt vừa. Một thức uống tươi mát cho buổi trưa hoặc những ngày bạn muốn đổi vị khỏi cà phê.",
         55000,
         "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=800&q=85",
         "Ly matcha xanh mát",
