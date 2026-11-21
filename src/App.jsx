@@ -192,7 +192,7 @@ function HomePage() {
           Một góc nhỏ giữa phố Hà Nội. Hôm nay bạn thế nào?
         </span>
         <h1>
-          Chạm một chút <em>bình yên.</em>
+          Chạm một 448 chút <em>bình yên.</em>
         </h1>
         <p>
           Có những ngày, điều bạn cần chỉ là một tách cà phê thơm và một nơi
