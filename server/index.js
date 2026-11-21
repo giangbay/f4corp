@@ -7,6 +7,7 @@ import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
 import { Server as SocketServer } from "socket.io";
 import { closeDatabase, database, execute, initializeDatabase, many, one } from "./database.js";
+import { getMenuItemPath } from "../src/menuSlug.js";
 import {
   bootstrapAdmin,
   clearSessionCookie,
@@ -248,12 +249,87 @@ app.post("/api/auth/logout", requireAuth, asyncRoute(async (request, response) =
 
 app.get("/api/menu", asyncRoute(async (_request, response) => {
   const items = await many(`
-    SELECT id, name, description, price, image, image_alt AS imageAlt
+    SELECT id, name, description, price, image, image_alt AS imageAlt,
+      best_seller AS bestSeller
     FROM menu_items
     ORDER BY sort_order, id
   `);
   response.json(items);
 }));
+
+app.post(
+  "/api/admin/menu",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const name =
+      typeof request.body?.name === "string" ? request.body.name.trim() : "";
+    const description =
+      typeof request.body?.description === "string"
+        ? request.body.description.trim()
+        : "";
+    const image =
+      typeof request.body?.image === "string" ? request.body.image.trim() : "";
+    const imageAlt =
+      typeof request.body?.imageAlt === "string"
+        ? request.body.imageAlt.trim()
+        : "";
+    const price = request.body?.price;
+    const bestSeller = request.body?.bestSeller === true;
+
+    if (name.length < 2 || name.length > 120) {
+      response.status(400).json({ error: "Tên món cần có từ 2 đến 120 ký tự." });
+      return;
+    }
+    if (description.length < 2 || description.length > 500) {
+      response.status(400).json({ error: "Mô tả cần có từ 2 đến 500 ký tự." });
+      return;
+    }
+    if (!Number.isSafeInteger(price) || price < 0 || price > 100_000_000) {
+      response.status(400).json({ error: "Giá món cần là số nguyên từ 0 đến 100.000.000." });
+      return;
+    }
+    if (image.length > 1000 || imageAlt.length < 2 || imageAlt.length > 250) {
+      response.status(400).json({ error: "Vui lòng cung cấp ảnh và mô tả ảnh hợp lệ." });
+      return;
+    }
+    let imageUrl;
+    try {
+      imageUrl = new URL(image);
+    } catch {
+      response.status(400).json({ error: "Đường dẫn hình ảnh không hợp lệ." });
+      return;
+    }
+    if (!["http:", "https:"].includes(imageUrl.protocol)) {
+      response.status(400).json({ error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." });
+      return;
+    }
+
+    let result;
+    try {
+      result = await execute(`
+        INSERT INTO menu_items
+          (name, description, price, image, image_alt, best_seller, sort_order)
+        SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
+        FROM menu_items
+      `, [name, description, price, image, imageAlt, bestSeller]);
+    } catch (error) {
+      if (error.code === "ER_DUP_ENTRY") {
+        response.status(409).json({ error: "Tên món này đã có trong thực đơn." });
+        return;
+      }
+      throw error;
+    }
+
+    const item = await one(`
+      SELECT id, name, description, price, image, image_alt AS imageAlt,
+        best_seller AS bestSeller
+      FROM menu_items
+      WHERE id = ?
+    `, [result.insertId]);
+    response.status(201).json(item);
+  }),
+);
 
 app.get("/api/locations", asyncRoute(async (_request, response) => {
   const locations = await many(`
@@ -673,6 +749,54 @@ app.delete(
     response.status(204).end();
   }),
 );
+
+function getPublicSiteUrl(request) {
+  const configuredSiteUrl = process.env.SITE_URL?.trim().replace(/\/+$/, "");
+  if (configuredSiteUrl) return configuredSiteUrl;
+
+  const forwardedHost = request.get("x-forwarded-host")?.split(",")[0].trim();
+  const forwardedProtocol = request
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    .trim();
+  const host = forwardedHost || request.get("host");
+  return `${forwardedProtocol || request.protocol}://${host}`;
+}
+
+app.get("/sitemap.xml", asyncRoute(async (request, response) => {
+  const items = await many("SELECT id, name FROM menu_items ORDER BY sort_order, id");
+  const siteUrl = getPublicSiteUrl(request);
+  const paths = [
+    "/",
+    "/story",
+    "/menu",
+    "/visit",
+    ...items.map((item) => getMenuItemPath(item)),
+  ];
+  const escapeXml = (value) =>
+    value.replace(/[<>&'"]/g, (character) => ({
+      "<": "&lt;",
+      ">": "&gt;",
+      "&": "&amp;",
+      "'": "&apos;",
+      '"': "&quot;",
+    })[character]);
+
+  response.setHeader("Cache-Control", "public, max-age=3600");
+  response.type("application/xml").send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+      paths.map((path) => `<url><loc>${escapeXml(`${siteUrl}${path}`)}</loc></url>`).join("") +
+      `</urlset>`,
+  );
+}));
+
+app.get("/robots.txt", (request, response) => {
+  const siteUrl = getPublicSiteUrl(request);
+  response
+    .type("text/plain")
+    .send(`User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`);
+});
 
 app.use("/api", (_request, response) => {
   response.status(404).json({ error: "Không tìm thấy API này." });

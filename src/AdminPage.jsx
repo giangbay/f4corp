@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import AdminMenuSection from "./AdminMenuSection.jsx";
 import { fetchApi } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
 
@@ -63,11 +64,17 @@ export default function AdminPage() {
           <div>
             <span className="eyebrow">Khu vực quản trị</span>
             <h1>Xin chào, {user.name}</h1>
-            <p>Quản lý tài khoản và nhân sự của Mộc Nhiên.</p>
+            <p>Quản lý thực đơn, tài khoản và nhân sự của Mộc Nhiên.</p>
           </div>
           <Link className="button" to="/shifts">Xem lịch giờ làm</Link>
         </div>
-        <div className="admin-stats">
+        <nav className="admin-nav" aria-label="Điều hướng quản trị">
+          <a href="#admin-overview">Tổng quan</a>
+          <a href="#admin-menu">Sản phẩm menu</a>
+          <a href="#admin-staff">Nhân sự</a>
+          <a href="#admin-accounts">Tài khoản</a>
+        </nav>
+        <div className="admin-stats" id="admin-overview">
           <article>
             <span>Tổng tài khoản</span>
             <strong>{users.length}</strong>
@@ -85,7 +92,8 @@ export default function AdminPage() {
             <strong>{users.filter((account) => account.role === "staff").length}</strong>
           </article>
         </div>
-        <section className="admin-users">
+        <AdminMenuSection />
+        <section className="admin-users" id="admin-staff">
           <h2>Tạo tài khoản nhân viên</h2>
           <form className="admin-staff-form" onSubmit={handleCreateStaff}>
             <div>
@@ -144,7 +152,7 @@ export default function AdminPage() {
             </button>
           </form>
         </section>
-        <section className="admin-users">
+        <section className="admin-users" id="admin-accounts">
           <h2>Tài khoản</h2>
           {error && <p className="form-message form-message-error" role="alert">{error}</p>}
           {!error && users.length === 0 && (

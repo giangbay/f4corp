@@ -48,6 +48,9 @@ npm start
 - Quản trị viên tạo tài khoản nhân viên trong trang `/admin`. Nhân viên đăng
   nhập để đăng ký giờ làm tại `/shifts`; nhân viên và quản trị viên đã đăng
   nhập đều có thể đăng ký. Bảng lịch có thể xem công khai.
+- Trang `/admin` có điều hướng quản trị và form đăng món mới, xem trước ảnh,
+  danh sách món hiện tại và tùy chọn đánh dấu món bán chạy. Món được đánh dấu
+  sẽ được gợi ý trên trang chi tiết các món khác.
 - Quản trị viên được khởi tạo bằng `ADMIN_EMAIL` và `ADMIN_PASSWORD` (tối thiểu
   14 ký tự). Không có tài khoản/mật khẩu quản trị mặc định; đặt hai biến này
   trong `.env` hoặc môi trường chạy, không đưa bí mật vào Git.
@@ -65,6 +68,10 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
 địa điểm, bài đăng, phiên đăng nhập và bình luận mẫu. API hiện tại gồm:
 
 - `GET /api/menu`
+- `POST /api/admin/menu` (yêu cầu phiên admin; tạo món với `name`,
+  `description`, `price`, `image`, `imageAlt` và `bestSeller`)
+- Mỗi món có trang riêng tại `/menu/<ten-mon>-<id>`; `/sitemap.xml` liệt kê
+  các trang món để công cụ tìm kiếm thu thập.
 - `GET /api/locations`
 - `GET /api/comments`
 - `GET /api/staff-shifts`, `POST /api/staff-shifts` (POST yêu cầu tài khoản
@@ -86,7 +93,8 @@ commit `.env`, mật khẩu, bản dump database hoặc thư mục/volume MySQL.
 local không tự được đẩy lên Git. Khi triển khai, tạo MySQL riêng trên server
 hoặc dịch vụ managed, cấu hình các biến `MYSQL_*` và `ADMIN_*` trong secret
 manager của môi trường đó, rồi chạy API. Không mở cổng MySQL ra Internet công
-cộng.
+cộng. Đặt `SITE_URL` thành URL HTTPS chính thức của website để sitemap dùng
+đúng domain khi triển khai.
 
 SQLite local cũ (nếu có) vẫn nằm trên máy và không được tự chuyển sang MySQL;
 MySQL mới sẽ được khởi tạo bằng dữ liệu seed mẫu. Cần xuất/nhập dữ liệu riêng

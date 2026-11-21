@@ -25,6 +25,16 @@ export function useApiResource(path) {
     error: "",
   });
 
+  const setData = React.useCallback((dataOrUpdater) => {
+    setState((current) => ({
+      ...current,
+      data:
+        typeof dataOrUpdater === "function"
+          ? dataOrUpdater(current.data)
+          : dataOrUpdater,
+    }));
+  }, []);
+
   React.useEffect(() => {
     const controller = new AbortController();
 
@@ -39,5 +49,5 @@ export function useApiResource(path) {
     return () => controller.abort();
   }, [path]);
 
-  return state;
+  return { ...state, setData };
 }

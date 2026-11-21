@@ -46,6 +46,7 @@ export async function initializeDatabase() {
       price INT UNSIGNED NOT NULL,
       image VARCHAR(1000) NOT NULL,
       image_alt VARCHAR(250) NOT NULL,
+      best_seller BOOLEAN NOT NULL DEFAULT FALSE,
       sort_order INT NOT NULL DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -139,6 +140,19 @@ export async function initializeDatabase() {
     await database.query(statement);
   }
 
+  const [bestSellerColumn] = await database.query(
+    "SHOW COLUMNS FROM menu_items LIKE 'best_seller'",
+  );
+  if (bestSellerColumn.length === 0) {
+    await database.query(
+      "ALTER TABLE menu_items ADD COLUMN best_seller BOOLEAN NOT NULL DEFAULT FALSE AFTER image_alt",
+    );
+    await database.query(
+      "UPDATE menu_items SET best_seller = TRUE WHERE name IN (?, ?)",
+      ["Cà phê sữa đá", "Latte dịu êm"],
+    );
+  }
+
   const connection = await database.getConnection();
   try {
     await connection.beginTransaction();
@@ -148,40 +162,43 @@ export async function initializeDatabase() {
     };
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        (name, description, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         "Cà phê sữa đá",
         "Robusta rang vừa, sữa thơm, hậu vị đậm đà thân quen.",
         39000,
         "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=800&q=85",
         "Cà phê sữa đá Việt Nam",
+        true,
         1,
       ],
     );
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        (name, description, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         "Latte dịu êm",
         "Espresso cân bằng cùng sữa tươi đánh mịn, thơm nhẹ nhàng.",
         49000,
         "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=85",
         "Tách latte nóng với lớp bọt sữa mịn",
+        true,
         2,
       ],
     );
     await seedExecute(
       `INSERT IGNORE INTO menu_items
-        (name, description, price, image, image_alt, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        (name, description, price, image, image_alt, best_seller, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         "Matcha mây xanh",
         "Matcha thơm dịu, sữa mát lành và một lớp kem mềm mượt.",
         55000,
         "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=800&q=85",
         "Ly matcha xanh mát",
+        false,
         3,
       ],
     );
