@@ -4,28 +4,40 @@ import { io } from "socket.io-client";
 import { fetchApi, useApiResource } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
 
-function formatShiftDate(value) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
+const SHIFT_OPTIONS = [
+  { name: "Sáng", tone: "morning", startTime: "07:00", endTime: "12:00" },
+  { name: "Chiều", tone: "afternoon", startTime: "12:00", endTime: "17:00" },
+  { name: "Tối", tone: "evening", startTime: "17:00", endTime: "22:00" },
+];
+
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatWeekday(date) {
+  return new Intl.DateTimeFormat("vi-VN", { weekday: "short" }).format(date);
+}
+
+function formatDayMonth(date) {
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "numeric",
+    month: "long",
     year: "numeric",
-    weekday: "short",
-  });
+  }).format(date);
 }
 
 export default function StaffSchedulePage() {
   const { user } = useAuth();
   const { data: shifts, loading, error } = useApiResource("/staff-shifts");
   const [savedShifts, setSavedShifts] = useState([]);
-  const [shiftDate, setShiftDate] = useState(
-    () => new Date().toISOString().slice(0, 10),
-  );
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("17:00");
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [realtimeError, setRealtimeError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingSlot, setSubmittingSlot] = useState("");
+  const [cancellingShiftId, setCancellingShiftId] = useState("");
 
   useEffect(() => {
     const socket = io();
@@ -39,18 +51,28 @@ export default function StaffSchedulePage() {
         ...existing.filter((item) => item.id !== shift.id),
       ]);
     });
+    socket.on("staff-shift:deleted", ({ id }) => {
+      setSavedShifts((existing) =>
+        existing.filter((shift) => String(shift.id) !== String(id)),
+      );
+    });
     return () => socket.disconnect();
   }, []);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function registerShift(shiftDate, shiftOption) {
     setSubmitError("");
-    setIsSubmitting(true);
+    const slotKey = `${shiftDate}:${shiftOption.startTime}`;
+    setSubmittingSlot(slotKey);
 
     try {
       const shift = await fetchApi("/staff-shifts", {
         method: "POST",
-        body: JSON.stringify({ shiftDate, startTime, endTime, note }),
+        body: JSON.stringify({
+          shiftDate,
+          startTime: shiftOption.startTime,
+          endTime: shiftOption.endTime,
+          note,
+        }),
       });
       setSavedShifts((existing) => [
         shift,
@@ -60,7 +82,30 @@ export default function StaffSchedulePage() {
     } catch (requestError) {
       setSubmitError(requestError.message);
     } finally {
-      setIsSubmitting(false);
+      setSubmittingSlot("");
+    }
+  }
+
+  async function cancelShift(shift) {
+    if (
+      !window.confirm(
+        `Bạn có chắc muốn hủy ca ${shift.startTime}–${shift.endTime} ngày ${shift.shiftDate}?`,
+      )
+    ) {
+      return;
+    }
+
+    setSubmitError("");
+    setCancellingShiftId(String(shift.id));
+    try {
+      await fetchApi(`/staff-shifts/${shift.id}`, { method: "DELETE" });
+      setSavedShifts((existing) =>
+        existing.filter((item) => String(item.id) !== String(shift.id)),
+      );
+    } catch (requestError) {
+      setSubmitError(requestError.message);
+    } finally {
+      setCancellingShiftId("");
     }
   }
 
@@ -72,6 +117,20 @@ export default function StaffSchedulePage() {
     first.shiftDate.localeCompare(second.shiftDate) ||
     first.startTime.localeCompare(second.startTime),
   );
+  const today = new Date();
+  const todayKey = formatDateKey(today);
+  const upcomingDays = Array.from({ length: 3 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    return date;
+  });
+  const upcomingDateKeys = new Set(upcomingDays.map(formatDateKey));
+  const upcomingShifts = visibleShifts.filter((shift) =>
+    upcomingDateKeys.has(shift.shiftDate),
+  );
+  const todayTime = `${String(today.getHours()).padStart(2, "0")}:${String(
+    today.getMinutes(),
+  ).padStart(2, "0")}`;
 
   return (
     <section className="staff-shifts">
@@ -80,83 +139,54 @@ export default function StaffSchedulePage() {
           <span className="eyebrow">Lịch làm việc tại Mộc</span>
           <h1>Đăng ký giờ làm</h1>
           <p>
-            Bảng lịch chung để mọi người cùng xem. Nhân viên và quản trị viên
-            đăng nhập để thêm khung giờ có thể làm.
+            Chọn ca trong 3 ngày gần nhất. Mỗi ca tối đa 2 nhân viên.
           </p>
         </header>
         <div className="shift-content">
-          <section className="shift-panel">
-            <h2>Thêm khung giờ</h2>
+          <section className="shift-board" aria-labelledby="shift-board-title">
+            <div className="shift-board-heading">
+              <div>
+                <h2 id="shift-board-title">Lịch đăng ký chung</h2>
+                <span className="shift-week-range">
+                  {formatDayMonth(upcomingDays[0])} –{" "}
+                  {formatDayMonth(upcomingDays[upcomingDays.length - 1])}
+                </span>
+              </div>
+            </div>
+            <p className="shift-week-count">
+              Lịch 07:00–23:00 · Ca tối kết thúc lúc 22:00, không đăng ký 22:00–23:00 ·{" "}
+              {upcomingShifts.length} lượt trong 3 ngày
+            </p>
             {user && ["staff", "admin"].includes(user.role) ? (
-              <form className="shift-form" onSubmit={handleSubmit}>
-                <label htmlFor="shift-date">Ngày làm</label>
-                <input
-                  id="shift-date"
-                  type="date"
-                  value={shiftDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(event) => setShiftDate(event.target.value)}
-                  required
-                />
-                <div className="shift-time-fields">
-                  <div>
-                    <label htmlFor="shift-start">Bắt đầu</label>
-                    <input
-                      id="shift-start"
-                      type="time"
-                      value={startTime}
-                      onChange={(event) => setStartTime(event.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="shift-end">Kết thúc</label>
-                    <input
-                      id="shift-end"
-                      type="time"
-                      value={endTime}
-                      onChange={(event) => setEndTime(event.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <label htmlFor="shift-note">Ghi chú (không bắt buộc)</label>
+              <div className="shift-note-field">
+                <label htmlFor="shift-note">Ghi chú cho ca đăng ký (không bắt buộc)</label>
                 <textarea
                   id="shift-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   maxLength={300}
-                  rows={3}
+                  rows={2}
                 />
-                {submitError && (
-                  <p className="form-message form-message-error" role="alert">
-                    {submitError}
-                  </p>
-                )}
-                <button className="button" type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Đang đăng ký…" : "Đăng ký giờ làm"}
-                </button>
-              </form>
+              </div>
             ) : (
               <p className="shift-access-message">
                 {user ? (
-                  "Chỉ tài khoản nhân viên hoặc quản trị viên mới có thể đăng ký giờ làm."
+                  "Chỉ tài khoản nhân viên hoặc quản trị viên mới có thể đăng ký ca."
                 ) : (
                   <>
                     <Link to="/login" state={{ from: "/shifts" }}>
                       Đăng nhập bằng tài khoản nhân viên hoặc quản trị viên
                     </Link>{" "}
-                    để đăng ký giờ làm.
+                    để đăng ký ca.
                   </>
                 )}
               </p>
             )}
-          </section>
-          <section className="shift-board" aria-labelledby="shift-board-title">
-            <div className="shift-board-heading">
-              <h2 id="shift-board-title">Lịch đăng ký chung</h2>
-              <span>{visibleShifts.length} khung giờ</span>
-            </div>
+            {submitError && (
+              <p className="form-message form-message-error" role="alert">
+                {submitError}
+              </p>
+            )}
             {loading && <p className="resource-message">Đang tải lịch…</p>}
             {error && (
               <p className="form-message form-message-error" role="alert">
@@ -168,35 +198,162 @@ export default function StaffSchedulePage() {
                 {realtimeError}
               </p>
             )}
-            {!loading && !error && visibleShifts.length === 0 && (
-              <p className="resource-message">Chưa có khung giờ nào được đăng ký.</p>
-            )}
-            {!error && visibleShifts.length > 0 && (
-              <div className="shift-table-wrap">
-                <table className="shift-table">
-                  <thead>
-                    <tr>
-                      <th>Ngày</th>
-                      <th>Giờ</th>
-                      <th>Người đăng ký</th>
-                      <th>Ghi chú</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleShifts.map((shift) => (
-                      <tr key={shift.id}>
-                        <td>{formatShiftDate(shift.shiftDate)}</td>
-                        <td>
-                          <time dateTime={`${shift.shiftDate}T${shift.startTime}`}>
-                            {shift.startTime}–{shift.endTime}
-                          </time>
-                        </td>
-                        <td>{shift.staffName}</td>
-                        <td>{shift.note || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {!error && (
+              <div className="shift-week-scroll">
+                <div className="shift-week-grid">
+                  <div className="shift-time-axis-row" aria-hidden="true">
+                    <span className="shift-time-axis-title">Ngày / giờ</span>
+                    <div className="shift-time-axis">
+                      {Array.from({ length: 16 }, (_, index) => index + 7).map(
+                        (hour) => (
+                          <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
+                        ),
+                      )}
+                      <span className="shift-time-axis-end">23:00</span>
+                    </div>
+                  </div>
+                  {upcomingDays.map((date) => {
+                    const dateKey = formatDateKey(date);
+                    const dayShifts = upcomingShifts.filter(
+                      (shift) => shift.shiftDate === dateKey,
+                    );
+                    const isPastDate = dateKey < todayKey;
+                    const dayTitle =
+                      dateKey === todayKey
+                        ? "Hôm nay"
+                        : dateKey === formatDateKey(upcomingDays[1])
+                          ? "Ngày mai"
+                          : "Ngày kia";
+
+                    return (
+                      <section
+                        className={`shift-day${dateKey === todayKey ? " is-today" : ""}`}
+                        key={dateKey}
+                        aria-label={`${formatWeekday(date)} ${date.getDate()}`}
+                      >
+                        <header className="shift-day-heading">
+                          <span>{dayTitle}</span>
+                          <strong>{date.getDate()}</strong>
+                          <span className="shift-day-month">
+                            {new Intl.DateTimeFormat("vi-VN", {
+                              month: "short",
+                            }).format(date)}
+                          </span>
+                        </header>
+                        <div className="shift-day-timeline">
+                          {SHIFT_OPTIONS.map((shiftOption) => {
+                            const slotShifts = dayShifts.filter(
+                              (shift) =>
+                                shift.startTime === shiftOption.startTime &&
+                                shift.endTime === shiftOption.endTime,
+                            );
+                            const alreadyRegistered = slotShifts.some(
+                              (shift) => String(shift.userId) === String(user?.id),
+                            );
+                            const isFull = slotShifts.length >= 2;
+                            const isPastShift =
+                              isPastDate ||
+                              (dateKey === todayKey &&
+                                todayTime >= shiftOption.endTime);
+                            const slotKey = `${dateKey}:${shiftOption.startTime}`;
+                            const isEligible =
+                              user && ["staff", "admin"].includes(user.role);
+
+                            return (
+                              <article
+                                className={`shift-slot shift-slot-${shiftOption.tone}${isFull ? " is-full" : ""}`}
+                                style={{
+                                  gridColumn: `${
+                                    Number(shiftOption.startTime.slice(0, 2)) - 6
+                                  } / span 5`,
+                                }}
+                                key={shiftOption.startTime}
+                              >
+                                <div className="shift-slot-time">
+                                  <span>{shiftOption.name}</span>
+                                  <time
+                                    dateTime={`${shiftOption.startTime}/${shiftOption.endTime}`}
+                                  >
+                                    {shiftOption.startTime}–{shiftOption.endTime}
+                                  </time>
+                                </div>
+                                <div className="shift-slot-staff">
+                                  {slotShifts.map((registeredShift) => {
+                                    const canCancel =
+                                      user?.role === "admin" ||
+                                      (user?.role === "staff" &&
+                                        String(registeredShift.userId) ===
+                                          String(user.id));
+                                    return (
+                                      <div
+                                        className="shift-slot-person"
+                                        key={registeredShift.id}
+                                      >
+                                        <strong>{registeredShift.staffName}</strong>
+                                        {registeredShift.note && (
+                                          <span>{registeredShift.note}</span>
+                                        )}
+                                        {canCancel && (
+                                          <button
+                                            className="shift-cancel-button"
+                                            type="button"
+                                            disabled={
+                                              cancellingShiftId ===
+                                              String(registeredShift.id)
+                                            }
+                                            onClick={() =>
+                                              cancelShift(registeredShift)
+                                            }
+                                          >
+                                            {cancellingShiftId ===
+                                            String(registeredShift.id)
+                                              ? "Đang hủy…"
+                                              : "Hủy ca"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="shift-slot-action">
+                                  <span>
+                                    {slotShifts.length}/2 nhân viên
+                                  </span>
+                                  {isEligible && (
+                                    <button
+                                      className="shift-register-button"
+                                      type="button"
+                                      disabled={
+                                        loading ||
+                                        isPastShift ||
+                                        isFull ||
+                                        alreadyRegistered ||
+                                        submittingSlot === slotKey
+                                      }
+                                      onClick={() =>
+                                        registerShift(dateKey, shiftOption)
+                                      }
+                                    >
+                                      {submittingSlot === slotKey
+                                        ? "Đang đăng ký…"
+                                        : alreadyRegistered
+                                          ? "Đã đăng ký"
+                                          : isFull
+                                            ? "Đã đủ người"
+                                            : isPastShift
+                                              ? "Đã qua"
+                                              : "Đăng ký ca"}
+                                    </button>
+                                  )}
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </section>

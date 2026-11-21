@@ -341,6 +341,11 @@ app.post(
     const note =
       typeof request.body?.note === "string" ? request.body.note.trim() : "";
     const parsedDate = new Date(`${shiftDate}T00:00:00.000Z`);
+    const allowedShiftTimes = new Map([
+      ["07:00", "12:00"],
+      ["12:00", "17:00"],
+      ["17:00", "22:00"],
+    ]);
 
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(shiftDate) ||
@@ -350,12 +355,8 @@ app.post(
       response.status(400).json({ error: "Vui lòng chọn ngày đăng ký hợp lệ." });
       return;
     }
-    if (
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) ||
-      endTime <= startTime
-    ) {
-      response.status(400).json({ error: "Giờ kết thúc phải sau giờ bắt đầu." });
+    if (allowedShiftTimes.get(startTime) !== endTime) {
+      response.status(400).json({ error: "Ca làm đã chọn không hợp lệ." });
       return;
     }
     if (note.length > 300) {
@@ -363,23 +364,122 @@ app.post(
       return;
     }
 
-    const result = await execute(`
-      INSERT INTO staff_shifts (user_id, shift_date, start_time, end_time, note)
-      VALUES (?, ?, ?, ?, ?)
-    `, [request.user.id, shiftDate, startTime, endTime, note]);
+    const connection = await database.getConnection();
+    const lockName = `staff-shift:${shiftDate}:${startTime}`;
+    let hasLock = false;
+    let transactionStarted = false;
+    try {
+      const [lockRows] = await connection.execute(
+        "SELECT GET_LOCK(?, 5) AS acquired",
+        [lockName],
+      );
+      hasLock = Number(lockRows[0]?.acquired) === 1;
+      if (!hasLock) {
+        response.status(503).json({
+          error: "Không thể đăng ký ca ngay lúc này. Vui lòng thử lại.",
+        });
+        return;
+      }
+
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const [registeredShifts] = await connection.execute(`
+        SELECT id, user_id AS userId
+        FROM staff_shifts
+        WHERE shift_date = ? AND start_time = ? AND end_time = ?
+      `, [shiftDate, startTime, endTime]);
+      if (registeredShifts.length >= 2) {
+        response.status(409).json({ error: "Ca này đã đủ 2 nhân viên đăng ký." });
+        return;
+      }
+      if (
+        registeredShifts.some(
+          (shift) => String(shift.userId) === String(request.user.id),
+        )
+      ) {
+        response.status(409).json({ error: "Bạn đã đăng ký ca này rồi." });
+        return;
+      }
+
+      const [result] = await connection.execute(`
+        INSERT INTO staff_shifts (user_id, shift_date, start_time, end_time, note)
+        VALUES (?, ?, ?, ?, ?)
+      `, [request.user.id, shiftDate, startTime, endTime, note]);
+      const [rows] = await connection.execute(`
+        SELECT staff_shifts.id, staff_shifts.user_id AS userId,
+          users.name AS staffName,
+          DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
+          TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
+          TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
+          staff_shifts.note, staff_shifts.created_at AS createdAt
+        FROM staff_shifts
+        JOIN users ON users.id = staff_shifts.user_id
+        WHERE staff_shifts.id = ?
+      `, [result.insertId]);
+      const shift = rows[0];
+      await connection.commit();
+      transactionStarted = false;
+
+      io.emit("staff-shift:created", shift);
+      response.status(201).json(shift);
+    } catch (error) {
+      if (transactionStarted) {
+        await connection.rollback();
+        transactionStarted = false;
+      }
+      throw error;
+    } finally {
+      try {
+        if (transactionStarted) await connection.rollback();
+        if (hasLock) {
+          await connection.execute("SELECT RELEASE_LOCK(?)", [lockName]);
+        }
+      } finally {
+        connection.release();
+      }
+    }
+  }),
+);
+
+app.delete(
+  "/api/staff-shifts/:shiftId",
+  requireAuth,
+  requireStaffOrAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      response.status(400).json({ error: "Ca làm không hợp lệ." });
+      return;
+    }
+
     const shift = await one(`
-      SELECT staff_shifts.id, staff_shifts.user_id AS userId,
-        users.name AS staffName,
-        DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
-        TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
-        TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
-        staff_shifts.note, staff_shifts.created_at AS createdAt
+      SELECT id, user_id AS userId,
+        DATE_FORMAT(shift_date, '%Y-%m-%d') AS shiftDate,
+        TIME_FORMAT(start_time, '%H:%i') AS startTime,
+        TIME_FORMAT(end_time, '%H:%i') AS endTime
       FROM staff_shifts
-      JOIN users ON users.id = staff_shifts.user_id
-      WHERE staff_shifts.id = ?
-    `, [result.insertId]);
-    io.emit("staff-shift:created", shift);
-    response.status(201).json(shift);
+      WHERE id = ?
+    `, [shiftId]);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+    if (
+      request.user.role !== "admin" &&
+      String(shift.userId) !== String(request.user.id)
+    ) {
+      response.status(403).json({ error: "Bạn chỉ có thể hủy ca do mình đăng ký." });
+      return;
+    }
+
+    const result = await execute("DELETE FROM staff_shifts WHERE id = ?", [shiftId]);
+    if (result.affectedRows !== 1) {
+      response.status(404).json({ error: "Ca làm này đã được hủy." });
+      return;
+    }
+
+    io.emit("staff-shift:deleted", { id: shiftId });
+    response.status(204).end();
   }),
 );
 

@@ -677,12 +677,11 @@ img {
 
 .shift-content {
   display: grid;
-  grid-template-columns: minmax(270px, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 20px;
+  gap: 24px;
 }
 
-.shift-panel,
 .shift-board {
   min-width: 0;
   padding: 22px;
@@ -690,7 +689,6 @@ img {
   background: var(--paper);
 }
 
-.shift-panel h2,
 .shift-board h2 {
   margin: 0 0 18px;
   font-family: var(--serif);
@@ -698,23 +696,23 @@ img {
   font-weight: 500;
 }
 
-.shift-form {
+.shift-note-field {
   display: grid;
-  gap: 9px;
+  gap: 7px;
+  max-width: 620px;
+  margin: 0 0 16px;
 }
 
-.shift-form label,
+.shift-note-field label,
 .admin-staff-form label {
-  margin-top: 5px;
   font-size: 12px;
   font-weight: 600;
 }
 
-.shift-form input,
-.shift-form textarea,
+.shift-note-field textarea,
 .admin-staff-form input {
   width: 100%;
-  min-height: 42px;
+  min-height: 54px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -724,28 +722,10 @@ img {
   font-size: 12px;
 }
 
-.shift-form textarea {
+.shift-note-field textarea {
   resize: vertical;
 }
 
-.shift-time-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.shift-time-fields > div {
-  display: grid;
-  gap: 9px;
-}
-
-.shift-form .button {
-  justify-self: start;
-  margin-top: 6px;
-  cursor: pointer;
-}
-
-.shift-form .button:disabled,
 .admin-staff-form .button:disabled {
   cursor: wait;
   opacity: 0.7;
@@ -764,47 +744,381 @@ img {
 
 .shift-board-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
 .shift-board-heading h2 {
-  margin-bottom: 18px;
+  margin-bottom: 5px;
 }
 
-.shift-board-heading > span {
+.shift-week-range,
+.shift-week-count {
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
 }
 
-.shift-table-wrap {
+.shift-week-count {
+  margin: 14px 0 12px;
+}
+
+.shift-week-scroll {
+  width: 100%;
   overflow-x: auto;
 }
 
-.shift-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  text-align: left;
+.shift-week-grid {
+  display: grid;
+  min-width: 760px;
+  gap: 10px;
 }
 
-.shift-table th,
-.shift-table td {
-  padding: 12px 9px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
+.shift-time-axis-row,
+.shift-day {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
 }
 
-.shift-table th {
+.shift-time-axis-row {
+  align-items: end;
+  padding: 0 16px 3px;
+}
+
+.shift-time-axis-title {
   color: var(--muted);
+  font-size: 10px;
   font-weight: 600;
+}
+
+.shift-time-axis {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  height: 24px;
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+}
+
+.shift-time-axis > span {
+  position: relative;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.shift-table td:nth-child(2) {
+.shift-time-axis > span::after {
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  width: 1px;
+  height: 5px;
+  background: #bfc5b9;
+  content: "";
+}
+
+.shift-time-axis > .shift-time-axis-end {
+  position: absolute;
+  right: 0;
+  bottom: 4px;
+  text-align: right;
+}
+
+.shift-time-axis > .shift-time-axis-end::after {
+  right: 0;
+  left: auto;
+}
+
+.shift-day {
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #fffefa;
+}
+
+.shift-day.is-today {
+  background: #f5f7f0;
+}
+
+.shift-day-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  flex-direction: column;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.shift-day-timeline {
+  display: grid;
+  min-height: 116px;
+  grid-column: 2;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  align-items: stretch;
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent 93.75%,
+      rgb(40 55 45 / 5%) 93.75%,
+      rgb(40 55 45 / 5%) 100%
+    ),
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(6.25% - 1px),
+      #e8e9e2 calc(6.25% - 1px),
+      #e8e9e2 6.25%
+    );
+}
+
+.shift-day-heading {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.shift-day-timeline {
+  grid-row: 1;
+}
+
+.shift-day-heading span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.shift-day-heading strong {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.shift-day-month {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.shift-day.is-today .shift-day-heading strong {
+  background: var(--green);
+  color: white;
+}
+
+.shift-slot {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  margin: 4px 3px;
+  padding: 9px 10px;
+  border: 1px solid #d5dfd1;
+  border-top: 3px solid var(--green);
+  background: #f2f6ef;
+  overflow-wrap: anywhere;
+}
+
+.shift-slot-afternoon {
+  border-color: #e9ddc9;
+  border-top-color: #bf8950;
+  background: #faf5ec;
+}
+
+.shift-slot-evening {
+  border-color: #d9d9cf;
+  border-top-color: #707b66;
+  background: #f1f2eb;
+}
+
+.shift-slot.is-full {
+  border-bottom-color: #c9ad8f;
+  box-shadow: inset 0 0 0 1px rgb(191 137 80 / 12%);
+}
+
+.shift-slot-time {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.shift-slot-time span {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shift-slot-time time {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
   white-space: nowrap;
+}
+
+.shift-slot-staff {
+  display: grid;
+  min-height: 34px;
+  align-content: start;
+  gap: 4px;
+}
+
+.shift-slot-person {
+  display: grid;
+  gap: 3px;
+  padding-left: 7px;
+  border-left: 2px solid #bf8950;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.shift-slot-person span {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.shift-cancel-button {
+  justify-self: start;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #a23d2b;
+  font: inherit;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.shift-cancel-button:disabled {
+  color: var(--muted);
+  cursor: wait;
+}
+
+.shift-slot-action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.shift-slot-action > span {
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.shift-register-button {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.shift-register-button:hover:not(:disabled) {
+  background: #294536;
+}
+
+.shift-register-button:disabled {
+  border-color: var(--line);
+  background: #eeece5;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .shift-board {
+    padding: 16px;
+  }
+
+  .shift-week-grid {
+    min-width: 0;
+  }
+
+  .shift-time-axis-row {
+    display: none;
+  }
+
+  .shift-day {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .shift-day-heading,
+  .shift-day-timeline {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .shift-day-heading {
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    flex-direction: row;
+    padding: 0 0 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .shift-day-heading strong {
+    width: 26px;
+    height: 26px;
+    order: -1;
+  }
+
+  .shift-day-timeline {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    background: none;
+  }
+
+  .shift-slot {
+    grid-column: auto !important;
+    gap: 7px;
+    margin: 0;
+    padding: 10px;
+  }
+
+  .shift-slot-time {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .shift-slot-time time {
+    font-size: 11px;
+  }
+
+  .shift-slot-person {
+    font-size: 11px;
+  }
+
+  .shift-slot-person span {
+    font-size: 10px;
+  }
+
+  .shift-board-heading {
+    align-items: flex-start;
+  }
+
+  .shift-week-count {
+    line-height: 1.6;
+  }
+
 }
 
 .admin-staff-form {
