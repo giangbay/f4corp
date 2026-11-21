@@ -105,7 +105,7 @@ function SiteHeader() {
           <span className="brand-mark" aria-hidden="true">
             m
           </span>
-          <span>Mộc Nhiên</span>
+          <span>Mộc Nhiên 448</span>
         </Link>
         <button
           className="menu-toggle"
