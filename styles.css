@@ -529,6 +529,46 @@ img {
   object-fit: cover;
 }
 
+.menu-item-gallery {
+  min-width: 0;
+}
+
+.menu-item-gallery-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 9px;
+}
+
+.menu-item-gallery-thumbnails button {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid transparent;
+  background: #e9ede5;
+  cursor: pointer;
+}
+
+.menu-item-gallery-thumbnails button:hover,
+.menu-item-gallery-thumbnails button.is-selected {
+  border-color: var(--green);
+}
+
+.menu-item-gallery-thumbnails button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.menu-item-gallery-thumbnails img {
+  width: 100%;
+  aspect-ratio: 1.25 / 1;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.menu-item-gallery-thumbnails button:hover img {
+  transform: scale(1.04);
+}
+
 .menu-item-copy h1 {
   margin: 14px 0 16px;
   font-family: var(--serif);
@@ -2139,7 +2179,8 @@ img {
 }
 
 .admin-product-form > input,
-.admin-product-form > textarea {
+.admin-product-form > textarea,
+.admin-gallery-image-fields input {
   width: 100%;
   min-width: 0;
   padding: 11px 12px;
@@ -2160,6 +2201,31 @@ img {
 
 .admin-product-form > textarea {
   resize: vertical;
+}
+
+.admin-gallery-fields {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+}
+
+.admin-gallery-fields legend {
+  padding-inline: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-gallery-image-fields {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-gallery-image-number {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .admin-character-count {
@@ -2210,6 +2276,27 @@ img {
 .admin-product-preview > img,
 .admin-product-placeholder {
   height: 150px;
+}
+
+.admin-product-preview-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 7px 7px 0;
+}
+
+.admin-product-preview-gallery img,
+.admin-product-preview-gallery-empty {
+  width: 100%;
+  height: 54px;
+}
+
+.admin-product-preview-gallery-empty {
+  display: grid;
+  place-items: center;
+  background: #e9ede5;
+  color: var(--muted);
+  font-size: 9px;
 }
 
 .admin-product-placeholder {

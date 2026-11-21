@@ -46,7 +46,7 @@ app.use(helmet({
     },
   },
 }));
-app.use(express.json({ limit: "8kb" }));
+app.use(express.json({ limit: "32kb" }));
 app.use("/api/auth", (_request, response, next) => {
   response.setHeader("Cache-Control", "no-store");
   next();
@@ -251,11 +251,18 @@ app.get("/api/menu", asyncRoute(async (_request, response) => {
   const items = await many(`
     SELECT id, name, description, introduction, price, image,
       image_alt AS imageAlt,
+      gallery_images AS galleryImages,
       best_seller AS bestSeller
     FROM menu_items
     ORDER BY sort_order, id
   `);
-  response.json(items);
+  response.json(items.map((item) => ({
+    ...item,
+    galleryImages:
+      typeof item.galleryImages === "string"
+        ? JSON.parse(item.galleryImages)
+        : item.galleryImages,
+  })));
 }));
 
 app.get(
@@ -380,12 +387,7 @@ app.post(
       typeof request.body?.introduction === "string"
         ? request.body.introduction.trim()
         : "";
-    const image =
-      typeof request.body?.image === "string" ? request.body.image.trim() : "";
-    const imageAlt =
-      typeof request.body?.imageAlt === "string"
-        ? request.body.imageAlt.trim()
-        : "";
+    const galleryImages = request.body?.galleryImages;
     const price = request.body?.price;
     const bestSeller = request.body?.bestSeller === true;
 
@@ -397,39 +399,65 @@ app.post(
       response.status(400).json({ error: "Mô tả cần có từ 2 đến 500 ký tự." });
       return;
     }
-    if (introduction.length < 20 || introduction.length > 3000) {
-      response.status(400).json({ error: "Phần giới thiệu cần có từ 20 đến 3.000 ký tự." });
+    if (introduction.length < 1001 || introduction.length > 5000) {
+      response.status(400).json({ error: "Phần giới thiệu cần có ít nhất 1.001 và tối đa 5.000 ký tự." });
       return;
     }
     if (!Number.isSafeInteger(price) || price < 0 || price > 100_000_000) {
       response.status(400).json({ error: "Giá món cần là số nguyên từ 0 đến 100.000.000." });
       return;
     }
-    if (image.length > 1000 || imageAlt.length < 2 || imageAlt.length > 250) {
-      response.status(400).json({ error: "Vui lòng cung cấp ảnh và mô tả ảnh hợp lệ." });
+    if (!Array.isArray(galleryImages) || galleryImages.length !== 3) {
+      response.status(400).json({ error: "Mỗi món cần có đúng 3 hình ảnh." });
       return;
     }
-    let imageUrl;
-    try {
-      imageUrl = new URL(image);
-    } catch {
-      response.status(400).json({ error: "Đường dẫn hình ảnh không hợp lệ." });
+    const validatedGallery = [];
+    for (const galleryImage of galleryImages) {
+      const url =
+        typeof galleryImage?.url === "string" ? galleryImage.url.trim() : "";
+      const alt =
+        typeof galleryImage?.alt === "string" ? galleryImage.alt.trim() : "";
+      if (url.length > 1000 || alt.length < 2 || alt.length > 250) {
+        response.status(400).json({ error: "Vui lòng nhập đủ đường dẫn và mô tả cho cả 3 hình ảnh." });
+        return;
+      }
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        response.status(400).json({ error: "Đường dẫn hình ảnh không hợp lệ." });
+        return;
+      }
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        response.status(400).json({ error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." });
+        return;
+      }
+      validatedGallery.push({ url, alt });
+    }
+    if (new Set(validatedGallery.map(({ url }) => url)).size !== 3) {
+      response.status(400).json({ error: "Ba hình ảnh cần có đường dẫn khác nhau." });
       return;
     }
-    if (!["http:", "https:"].includes(imageUrl.protocol)) {
-      response.status(400).json({ error: "Hình ảnh phải dùng đường dẫn HTTP hoặc HTTPS." });
-      return;
-    }
+    const [mainImage] = validatedGallery;
 
     let result;
     try {
       result = await execute(`
         INSERT INTO menu_items
           (name, description, introduction, price, image, image_alt,
-            best_seller, sort_order)
-        SELECT ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
+            gallery_images, best_seller, sort_order)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1
         FROM menu_items
-      `, [name, description, introduction, price, image, imageAlt, bestSeller]);
+      `, [
+        name,
+        description,
+        introduction,
+        price,
+        mainImage.url,
+        mainImage.alt,
+        JSON.stringify(validatedGallery),
+        bestSeller,
+      ]);
     } catch (error) {
       if (error.code === "ER_DUP_ENTRY") {
         response.status(409).json({ error: "Tên món này đã có trong thực đơn." });
@@ -440,12 +468,18 @@ app.post(
 
     const item = await one(`
       SELECT id, name, description, introduction, price, image,
-        image_alt AS imageAlt,
+        image_alt AS imageAlt, gallery_images AS galleryImages,
         best_seller AS bestSeller
       FROM menu_items
       WHERE id = ?
     `, [result.insertId]);
-    response.status(201).json(item);
+    response.status(201).json({
+      ...item,
+      galleryImages:
+        typeof item.galleryImages === "string"
+          ? JSON.parse(item.galleryImages)
+          : item.galleryImages,
+    });
   }),
 );
 

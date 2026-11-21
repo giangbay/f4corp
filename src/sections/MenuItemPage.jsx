@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useApiResource } from "../api.js";
 import MenuReviews from "../components/MenuReviews.jsx";
@@ -10,6 +11,16 @@ export default function MenuItemPage() {
   const { slug } = useParams();
   const { data: items, loading, error } = useApiResource("/menu");
   const item = items.find((menuItem) => getMenuItemPath(menuItem).slice(6) === slug);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const galleryImages = item?.galleryImages?.length
+    ? item.galleryImages
+    : item
+      ? [{ url: item.image, alt: item.imageAlt }]
+      : [];
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [item?.id]);
 
   if (loading || error) {
     return (
@@ -33,7 +44,7 @@ export default function MenuItemPage() {
     "@type": "Product",
     name: item.name,
     description: introduction,
-    image: item.image,
+    image: galleryImages.map((galleryImage) => galleryImage.url),
     offers: {
       "@type": "Offer",
       price: item.price,
@@ -52,7 +63,7 @@ export default function MenuItemPage() {
       <SeoMetadata
         title={title}
         description={description}
-        image={item.image}
+        image={galleryImages[0].url}
         structuredData={structuredData}
       />
       <section className="menu-item-section">
@@ -65,8 +76,29 @@ export default function MenuItemPage() {
             <span aria-current="page">{item.name}</span>
           </nav>
           <article className="menu-item-detail">
-            <div className="menu-item-image-wrap">
-              <img src={item.image} alt={item.imageAlt} />
+            <div className="menu-item-gallery">
+              <div className="menu-item-image-wrap">
+                <img
+                  src={galleryImages[selectedImageIndex].url}
+                  alt={galleryImages[selectedImageIndex].alt}
+                />
+              </div>
+              {galleryImages.length > 1 && (
+                <div className="menu-item-gallery-thumbnails" aria-label="Thư viện hình ảnh sản phẩm">
+                  {galleryImages.map((galleryImage, index) => (
+                    <button
+                      aria-label={`Xem hình ${index + 1}: ${galleryImage.alt}`}
+                      aria-pressed={selectedImageIndex === index}
+                      className={selectedImageIndex === index ? "is-selected" : ""}
+                      key={`${galleryImage.url}-${index}`}
+                      onClick={() => setSelectedImageIndex(index)}
+                      type="button"
+                    >
+                      <img src={galleryImage.url} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="menu-item-copy">
               <span className="eyebrow">Món ngon tại Mộc Nhiên Coffee</span>

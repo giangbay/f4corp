@@ -75,9 +75,15 @@ export default function MenuReviews({ menuId, menuName }) {
         method: "POST",
         body: JSON.stringify({ rating, content }),
       });
-      const updatedData = await fetchApi(`/menu/${menuId}/reviews`);
-      setReviewData(updatedData);
       setSuccess("Cảm ơn bạn đã chia sẻ cảm nhận về món này.");
+      try {
+        const updatedData = await fetchApi(`/menu/${menuId}/reviews`);
+        setReviewData(updatedData);
+      } catch (refreshError) {
+        setFormError(
+          `Đánh giá đã được lưu nhưng chưa thể tải lại danh sách: ${refreshError.message}`,
+        );
+      }
     } catch (error) {
       setFormError(error.message);
     } finally {

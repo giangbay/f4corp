@@ -8,25 +8,45 @@ const EMPTY_PRODUCT = {
   description: "",
   introduction: "",
   price: "",
-  image: "",
-  imageAlt: "",
+  galleryImages: [
+    { url: "", alt: "" },
+    { url: "", alt: "" },
+    { url: "", alt: "" },
+  ],
   bestSeller: false,
 };
 
 function ProductPreview({ product }) {
+  const firstImage = product.galleryImages[0];
   return (
     <article className="admin-product-preview">
-      {product.image ? (
-        <img src={product.image} alt={product.imageAlt || "Ảnh xem trước món"} />
+      {firstImage.url ? (
+        <img src={firstImage.url} alt={firstImage.alt || "Ảnh xem trước món"} />
       ) : (
         <div className="admin-product-placeholder">Ảnh món sẽ hiển thị ở đây</div>
       )}
+      <div className="admin-product-preview-gallery">
+        {product.galleryImages.map((image, index) =>
+          image.url ? (
+            <img key={index} src={image.url} alt={image.alt || `Ảnh sản phẩm ${index + 1}`} />
+          ) : (
+            <div className="admin-product-preview-gallery-empty" key={index}>
+              Ảnh {index + 1}
+            </div>
+          ),
+        )}
+      </div>
       <div className="admin-product-preview-copy">
         <div className="admin-product-preview-heading">
           <strong>{product.name || "Tên món mới"}</strong>
           {product.bestSeller && <span className="best-seller-badge">Bán chạy</span>}
         </div>
         <p>{product.description || "Mô tả món ăn, hương vị và nguyên liệu."}</p>
+        {product.introduction && (
+          <p className="admin-product-introduction-preview">
+            {product.introduction}
+          </p>
+        )}
         <span className="price">
           {Number(product.price || 0).toLocaleString("vi-VN")}đ
         </span>
@@ -44,6 +64,17 @@ export default function AdminMenuSection() {
 
   function updateField(event) {
     const { name, value, checked, type } = event.target;
+    const galleryMatch = name.match(/^galleryImages\.(\d+)\.(url|alt)$/);
+    if (galleryMatch) {
+      const [, index, field] = galleryMatch;
+      setProduct((current) => ({
+        ...current,
+        galleryImages: current.galleryImages.map((image, imageIndex) =>
+          imageIndex === Number(index) ? { ...image, [field]: value } : image,
+        ),
+      }));
+      return;
+    }
     setProduct((current) => ({
       ...current,
       [name]: type === "checkbox" ? checked : value,
@@ -61,6 +92,7 @@ export default function AdminMenuSection() {
         method: "POST",
         body: JSON.stringify({
           ...product,
+          introduction: product.introduction.trim(),
           price: Number(product.price),
         }),
       });
@@ -124,20 +156,22 @@ export default function AdminMenuSection() {
             required
           />
 
-          <label htmlFor="product-introduction">Giới thiệu chi tiết</label>
+          <label htmlFor="product-introduction">
+            Giới thiệu chi tiết (tối thiểu 1.001 ký tự)
+          </label>
           <textarea
             id="product-introduction"
             name="introduction"
             value={product.introduction}
             onChange={updateField}
-            minLength={20}
-            maxLength={3000}
-            rows={5}
-            placeholder="Kể rõ hơn về nguyên liệu, cách pha chế, hương vị và trải nghiệm của món"
+            minLength={1001}
+            maxLength={5000}
+            rows={9}
+            placeholder="Viết câu chuyện, nguyên liệu, cách pha chế, hương vị và trải nghiệm thưởng thức của món (ít nhất 1.001 ký tự)"
             required
           />
           <span className="admin-character-count">
-            {product.introduction.length}/3.000 ký tự
+            {product.introduction.length.toLocaleString("vi-VN")}/5.000 ký tự
           </span>
 
           <label htmlFor="product-price">Giá bán (đ)</label>
@@ -154,29 +188,42 @@ export default function AdminMenuSection() {
             required
           />
 
-          <label htmlFor="product-image">Đường dẫn hình ảnh</label>
-          <input
-            id="product-image"
-            name="image"
-            type="url"
-            value={product.image}
-            onChange={updateField}
-            maxLength={1000}
-            placeholder="https://..."
-            required
-          />
-
-          <label htmlFor="product-image-alt">Mô tả hình ảnh (alt)</label>
-          <input
-            id="product-image-alt"
-            name="imageAlt"
-            value={product.imageAlt}
-            onChange={updateField}
-            minLength={2}
-            maxLength={250}
-            placeholder="Mô tả ngắn để hỗ trợ SEO và trợ năng"
-            required
-          />
+          <fieldset className="admin-gallery-fields">
+            <legend>Thư viện ảnh · cần đúng 3 ảnh khác nhau</legend>
+            {product.galleryImages.map((image, index) => (
+              <div className="admin-gallery-image-fields" key={index}>
+                <span className="admin-gallery-image-number">
+                  Ảnh {index + 1}{index === 0 ? " · ảnh đại diện" : ""}
+                </span>
+                <label className="visually-hidden" htmlFor={`product-image-${index}`}>
+                  Đường dẫn hình ảnh {index + 1}
+                </label>
+                <input
+                  id={`product-image-${index}`}
+                  name={`galleryImages.${index}.url`}
+                  type="url"
+                  value={image.url}
+                  onChange={updateField}
+                  maxLength={1000}
+                  placeholder="https://..."
+                  required
+                />
+                <label className="visually-hidden" htmlFor={`product-image-alt-${index}`}>
+                  Mô tả hình ảnh {index + 1}
+                </label>
+                <input
+                  id={`product-image-alt-${index}`}
+                  name={`galleryImages.${index}.alt`}
+                  value={image.alt}
+                  onChange={updateField}
+                  minLength={2}
+                  maxLength={250}
+                  placeholder="Mô tả ảnh để hỗ trợ SEO và trợ năng"
+                  required
+                />
+              </div>
+            ))}
+          </fieldset>
 
           <label className="admin-best-seller-option">
             <input
