@@ -239,9 +239,9 @@ export async function initializeDatabase() {
        WHERE NOT EXISTS (SELECT 1 FROM locations)`,
       [
         "Mộc Nhiên Coffee",
-        "25 Nguyễn Thị Minh Khai",
-        "Quận 1, TP. Hồ Chí Minh",
-        "0901 234 567",
+        "448 Tây Sơn",
+        "Đống Đa, Hà Nội",
+        "0348211711",
         "Mỗi ngày · 07:00 — 22:00",
         JSON.stringify(["Wifi miễn phí", "Có chỗ ngồi ngoài trời"]),
       ],
