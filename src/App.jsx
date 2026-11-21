@@ -127,9 +127,25 @@ function SiteHeader() {
           <NavLink to="/" end>
             Trang chủ
           </NavLink>
-          <NavLink to="/story">Câu chuyện</NavLink>
+          <Link
+            to="/story"
+            aria-current={
+              location.pathname === "/story" && !location.hash ? "page" : undefined
+            }
+          >
+            Câu chuyện
+          </Link>
           <NavLink to="/menu">Thực đơn</NavLink>
-          <NavLink to="/story#khong-gian">Không gian</NavLink>
+          <Link
+            to="/story#khong-gian"
+            aria-current={
+              location.pathname === "/story" && location.hash === "#khong-gian"
+                ? "location"
+                : undefined
+            }
+          >
+            Không gian
+          </Link>
           <NavLink to="/chat">Bảng chat</NavLink>
           {user?.role === "admin" && <NavLink to="/admin">Quản trị</NavLink>}
           {user ? (

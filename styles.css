@@ -127,7 +127,8 @@ img {
   display: none;
 }
 
-.nav-links a[aria-current="page"]:not(.nav-cta) {
+.nav-links a[aria-current="page"]:not(.nav-cta),
+.nav-links a[aria-current="location"]:not(.nav-cta) {
   color: var(--orange);
 }
 
@@ -1224,7 +1225,8 @@ img {
     margin-top: 14px;
   }
 
-  .nav-links a[aria-current="page"]:not(.nav-cta) {
+  .nav-links a[aria-current="page"]:not(.nav-cta),
+  .nav-links a[aria-current="location"]:not(.nav-cta) {
     font-weight: 700;
   }
 
