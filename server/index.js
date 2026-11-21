@@ -303,6 +303,7 @@ app.post(
       FROM comments
       WHERE id = ?
     `, [result.insertId]);
+    io.emit("comments:created", comment);
     response.status(201).json(comment);
   }),
 );

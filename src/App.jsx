@@ -7,6 +7,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import { io } from "socket.io-client";
 import { fetchApi, useApiResource } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
 import AdminPage from "./AdminPage.jsx";
@@ -292,6 +293,25 @@ function CommentsSection() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedComments, setSavedComments] = useState([]);
+  const [realtimeError, setRealtimeError] = useState("");
+
+  useEffect(() => {
+    const socket = io();
+    socket.on("connect", () => setRealtimeError(""));
+    socket.on("connect_error", () => {
+      setRealtimeError(
+        "Không thể kết nối cập nhật bình luận trực tiếp. Hãy tải lại trang để đồng bộ.",
+      );
+    });
+    socket.on("comments:created", (comment) => {
+      setSavedComments((existing) => [
+        comment,
+        ...existing.filter((item) => item.id !== comment.id),
+      ]);
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -312,7 +332,11 @@ function CommentsSection() {
     }
   }
 
-  const visibleComments = [...savedComments, ...comments];
+  const visibleComments = Array.from(
+    new Map(
+      [...savedComments, ...comments].map((comment) => [comment.id, comment]),
+    ).values(),
+  );
 
   return (
     <section className="comments-section">
@@ -355,6 +379,11 @@ function CommentsSection() {
         </div>
         <div className="comments-list" aria-live="polite">
           <ResourceStatus loading={loading} error={error} />
+          {realtimeError && (
+            <p className="form-message form-message-error" role="alert">
+              {realtimeError}
+            </p>
+          )}
           {!loading && !error && visibleComments.length === 0 && (
             <p className="resource-message">Chưa có bình luận nào.</p>
           )}
