@@ -93,9 +93,11 @@ export function requireAdmin(request, response, next) {
   next();
 }
 
-export function requireStaff(request, response, next) {
-  if (request.user?.role !== "staff") {
-    response.status(403).json({ error: "Chức năng này chỉ dành cho nhân viên." });
+export function requireStaffOrAdmin(request, response, next) {
+  if (!["staff", "admin"].includes(request.user?.role)) {
+    response.status(403).json({
+      error: "Chức năng này chỉ dành cho nhân viên hoặc quản trị viên.",
+    });
     return;
   }
   next();

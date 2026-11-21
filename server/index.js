@@ -17,7 +17,7 @@ import {
   readSessionToken,
   requireAdmin,
   requireAuth,
-  requireStaff,
+  requireStaffOrAdmin,
   sessionCookie,
   verifyPassword,
 } from "./auth.js";
@@ -330,7 +330,7 @@ app.post(
   "/api/staff-shifts",
   chatWriteLimiter,
   requireAuth,
-  requireStaff,
+  requireStaffOrAdmin,
   asyncRoute(async (request, response) => {
     const shiftDate =
       typeof request.body?.shiftDate === "string" ? request.body.shiftDate : "";

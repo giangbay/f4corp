@@ -80,14 +80,14 @@ export default function StaffSchedulePage() {
           <span className="eyebrow">Lịch làm việc tại Mộc</span>
           <h1>Đăng ký giờ làm</h1>
           <p>
-            Bảng lịch chung để mọi người cùng xem. Nhân viên đăng nhập để thêm
-            khung giờ có thể làm.
+            Bảng lịch chung để mọi người cùng xem. Nhân viên và quản trị viên
+            đăng nhập để thêm khung giờ có thể làm.
           </p>
         </header>
         <div className="shift-content">
           <section className="shift-panel">
             <h2>Thêm khung giờ</h2>
-            {user?.role === "staff" ? (
+            {user && ["staff", "admin"].includes(user.role) ? (
               <form className="shift-form" onSubmit={handleSubmit}>
                 <label htmlFor="shift-date">Ngày làm</label>
                 <input
@@ -140,11 +140,11 @@ export default function StaffSchedulePage() {
             ) : (
               <p className="shift-access-message">
                 {user ? (
-                  "Chỉ tài khoản nhân viên mới có thể đăng ký giờ làm."
+                  "Chỉ tài khoản nhân viên hoặc quản trị viên mới có thể đăng ký giờ làm."
                 ) : (
                   <>
                     <Link to="/login" state={{ from: "/shifts" }}>
-                      Đăng nhập bằng tài khoản nhân viên
+                      Đăng nhập bằng tài khoản nhân viên hoặc quản trị viên
                     </Link>{" "}
                     để đăng ký giờ làm.
                   </>
@@ -178,7 +178,7 @@ export default function StaffSchedulePage() {
                     <tr>
                       <th>Ngày</th>
                       <th>Giờ</th>
-                      <th>Nhân viên</th>
+                      <th>Người đăng ký</th>
                       <th>Ghi chú</th>
                     </tr>
                   </thead>

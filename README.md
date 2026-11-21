@@ -46,8 +46,8 @@ npm start
 - Khách hàng tạo tài khoản tại `/login`; vai trò được gán phía máy chủ và mật
   khẩu được băm bằng scrypt.
 - Quản trị viên tạo tài khoản nhân viên trong trang `/admin`. Nhân viên đăng
-  nhập để đăng ký giờ làm tại `/shifts`; bảng lịch có thể xem công khai, nhưng
-  API chỉ cho tài khoản `staff` đã đăng nhập tạo đăng ký.
+  nhập để đăng ký giờ làm tại `/shifts`; nhân viên và quản trị viên đã đăng
+  nhập đều có thể đăng ký. Bảng lịch có thể xem công khai.
 - Quản trị viên được khởi tạo bằng `ADMIN_EMAIL` và `ADMIN_PASSWORD` (tối thiểu
   14 ký tự). Không có tài khoản/mật khẩu quản trị mặc định; đặt hai biến này
   trong `.env` hoặc môi trường chạy, không đưa bí mật vào Git.
@@ -67,7 +67,8 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
 - `GET /api/menu`
 - `GET /api/locations`
 - `GET /api/comments`
-- `GET /api/staff-shifts`, `POST /api/staff-shifts` (POST yêu cầu tài khoản nhân viên)
+- `GET /api/staff-shifts`, `POST /api/staff-shifts` (POST yêu cầu tài khoản
+  nhân viên hoặc quản trị viên)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`,
   `GET /api/auth/me`
 - `GET /api/posts`, `POST /api/posts`, `POST /api/posts/:postId/comments`,
