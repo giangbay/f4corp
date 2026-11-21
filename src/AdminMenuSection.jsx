@@ -71,6 +71,7 @@ export default function AdminMenuSection() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   function updateField(event) {
     const { name, value, checked, type } = event.target;
@@ -94,6 +95,7 @@ export default function AdminMenuSection() {
   function startEditing(item) {
     setSearchParams({ edit: String(item.id) }, { replace: true });
     setEditingProductId(item.id);
+    setIsFormOpen(true);
     setProduct({
       name: item.name,
       category: item.category,
@@ -105,15 +107,12 @@ export default function AdminMenuSection() {
     });
     setFormError("");
     setSuccess("");
-    document.getElementById("admin-product-form")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
   }
 
   function cancelEditing() {
     setSearchParams({}, { replace: true });
     setEditingProductId(null);
+    setIsFormOpen(false);
     setProduct(EMPTY_PRODUCT);
     setFormError("");
     setSuccess("");
@@ -159,6 +158,15 @@ export default function AdminMenuSection() {
     }
   }, [editingProductId, error, loading, products, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (isFormOpen && editingProductId !== null) {
+      document.getElementById("admin-product-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [editingProductId, isFormOpen]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
@@ -186,6 +194,7 @@ export default function AdminMenuSection() {
         setProducts((current) => [...current, savedProduct]);
       }
       setEditingProductId(null);
+      setIsFormOpen(false);
       setSearchParams({}, { replace: true });
       setProduct(EMPTY_PRODUCT);
       setSuccess(
@@ -205,20 +214,40 @@ export default function AdminMenuSection() {
       <div className="admin-menu-heading">
         <div>
           <span className="eyebrow">Thực đơn Mộc Nhiên</span>
-          <h2>{editingProductId ? "Chỉnh sửa sản phẩm" : "Thêm món mới"}</h2>
+          <h2>Quản lý sản phẩm</h2>
           <p>
-            {editingProductId
-              ? "Cập nhật danh mục, hình ảnh và nội dung hiển thị của món."
-              : "Tạo trang riêng cho món, phân loại thực đơn và chọn món bán chạy để giới thiệu ở trang chi tiết."}
+            Thêm, chỉnh sửa và quản lý các món đang hiển thị trên thực đơn.
           </p>
         </div>
-        <span className="admin-menu-total">
-          <strong>{products.length}</strong> món
-        </span>
+        <div className="admin-menu-heading-actions">
+          <span className="admin-menu-total">
+            <strong>{products.length}</strong> món
+          </span>
+          {!isFormOpen && (
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                setProduct(EMPTY_PRODUCT);
+                setEditingProductId(null);
+                setFormError("");
+                setSuccess("");
+                setIsFormOpen(true);
+              }}
+            >
+              + Thêm sản phẩm
+            </button>
+          )}
+        </div>
       </div>
+      {success && (
+        <p className="form-message form-message-success" role="status">
+          {success}
+        </p>
+      )}
 
       <div className="admin-menu-layout">
-        <form
+        {isFormOpen && <form
           className="admin-product-form"
           id="admin-product-form"
           onSubmit={handleSubmit}
@@ -364,11 +393,6 @@ export default function AdminMenuSection() {
               {formError}
             </p>
           )}
-          {success && (
-            <p className="form-message form-message-success" role="status">
-              {success}
-            </p>
-          )}
           <div className="admin-product-form-actions">
             <button className="button admin-product-submit" type="submit" disabled={isSubmitting}>
               {isSubmitting
@@ -389,8 +413,18 @@ export default function AdminMenuSection() {
                 Hủy chỉnh sửa
               </button>
             )}
+            {!editingProductId && (
+              <button
+                className="admin-product-cancel"
+                type="button"
+                onClick={cancelEditing}
+                disabled={isSubmitting}
+              >
+                Đóng
+              </button>
+            )}
           </div>
-        </form>
+        </form>}
 
         <div className="admin-product-list">
           <div className="admin-product-list-heading">

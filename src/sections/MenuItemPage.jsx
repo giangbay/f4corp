@@ -15,7 +15,6 @@ export default function MenuItemPage() {
   const { data: items, loading, error } = useApiResource("/menu");
   const item = items.find((menuItem) => getMenuItemPath(menuItem).slice(6) === slug);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [zoomPreview, setZoomPreview] = useState(null);
   const [latestReviewState, setLatestReviewState] = useState({
     reviews: [],
     loading: true,
@@ -26,49 +25,6 @@ export default function MenuItemPage() {
     : item
       ? [{ url: item.image, alt: item.imageAlt }]
       : [];
-
-  function showZoomPreview(event) {
-    const previewWidth = Math.min(340, window.innerWidth - 24);
-    const x = event.clientX + 24 + previewWidth > window.innerWidth
-      ? event.clientX - previewWidth - 24
-      : event.clientX + 24;
-    const y = Math.max(12, Math.min(event.clientY - 120, window.innerHeight - 300));
-    setZoomPreview((current) => ({
-      locked: current?.locked ?? false,
-      x,
-      y,
-      url: galleryImages[selectedImageIndex].url,
-      alt: galleryImages[selectedImageIndex].alt,
-    }));
-  }
-
-  function moveZoomPreview(event) {
-    if (!zoomPreview) return;
-    const previewWidth = Math.min(340, window.innerWidth - 24);
-    const x = event.clientX + 24 + previewWidth > window.innerWidth
-      ? event.clientX - previewWidth - 24
-      : event.clientX + 24;
-    const y = Math.max(12, Math.min(event.clientY - 120, window.innerHeight - 300));
-    setZoomPreview((current) => ({ ...current, x, y }));
-  }
-
-  function toggleZoomPreview(event) {
-    event.stopPropagation();
-    const previewWidth = Math.min(340, window.innerWidth - 24);
-    const x = event.clientX + 24 + previewWidth > window.innerWidth
-      ? event.clientX - previewWidth - 24
-      : event.clientX + 24;
-    const y = Math.max(12, Math.min(event.clientY - 120, window.innerHeight - 300));
-    setZoomPreview((current) => current?.locked
-      ? null
-      : {
-          locked: true,
-          x,
-          y,
-          url: galleryImages[selectedImageIndex].url,
-          alt: galleryImages[selectedImageIndex].alt,
-        });
-  }
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -148,10 +104,6 @@ export default function MenuItemPage() {
                     <img
                       src={galleryImages[selectedImageIndex].url}
                       alt={galleryImages[selectedImageIndex].alt}
-                      onMouseEnter={showZoomPreview}
-                      onMouseMove={moveZoomPreview}
-                      onMouseLeave={() => setZoomPreview((current) => current?.locked ? current : null)}
-                      onClick={toggleZoomPreview}
                     />
                   </div>
                   {galleryImages.length > 1 && (
@@ -167,7 +119,6 @@ export default function MenuItemPage() {
                           key={`${galleryImage.url}-${index}`}
                           onClick={() => {
                             setSelectedImageIndex(index);
-                            setZoomPreview(null);
                           }}
                           type="button"
                         >
@@ -177,23 +128,6 @@ export default function MenuItemPage() {
                     </div>
                   )}
                 </div>
-                {zoomPreview && (
-                  <div
-                    className={`menu-item-zoom-preview${zoomPreview.locked ? " is-locked" : ""}`}
-                    style={{ left: zoomPreview.x, top: zoomPreview.y }}
-                    role="dialog"
-                    aria-label={`Phóng to: ${zoomPreview.alt}`}
-                  >
-                    <button
-                      type="button"
-                      aria-label="Đóng hình phóng to"
-                      onClick={() => setZoomPreview(null)}
-                    >
-                      ×
-                    </button>
-                    <img src={zoomPreview.url} alt="" />
-                  </div>
-                )}
                 <div className="menu-item-copy">
                   <span className="eyebrow">Món ngon tại Mộc Nhiên Coffee</span>
                   <h1>{item.name}</h1>
