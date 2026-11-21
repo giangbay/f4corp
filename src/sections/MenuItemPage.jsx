@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../AuthContext.jsx";
 import { useApiResource } from "../api.js";
 import MenuItemSidebar from "../components/MenuItemSidebar.jsx";
@@ -11,6 +11,7 @@ import { getMenuItemPath } from "../menuSlug.js";
 
 export default function MenuItemPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: items, loading, error } = useApiResource("/menu");
   const item = items.find((menuItem) => getMenuItemPath(menuItem).slice(6) === slug);
@@ -142,6 +143,15 @@ export default function MenuItemPage() {
                     Thưởng thức tại Mộc Nhiên Coffee, 448 Tây Sơn, Đống Đa, Hà Nội.
                   </p>
                   <div className="menu-item-actions">
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() =>
+                        navigate("/menu", { state: { addToOrder: item.id } })
+                      }
+                    >
+                      Thêm vào đơn
+                    </button>
                     <Link className="button" to="/visit">
                       Ghé quán thưởng thức
                     </Link>

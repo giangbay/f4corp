@@ -445,42 +445,65 @@ export default function AdminMenuSection() {
           )}
           {!loading &&
             !error &&
-            products.map((item) => (
-              <article className="admin-product-row" key={item.id}>
-                <img src={item.image} alt={item.imageAlt} loading="lazy" />
-                <div>
-                  <div className="admin-product-row-title">
-                    <strong>{item.name}</strong>
-                    <span className="admin-product-category">
-                      {getMenuCategoryLabel(item.category)}
-                    </span>
-                    {Boolean(item.bestSeller) && (
-                      <span className="best-seller-badge">Bán chạy</span>
+            <div className="admin-product-category-groups">
+              {MENU_CATEGORIES.map((category) => {
+                const categoryProducts = products.filter(
+                  (item) => item.category === category.value,
+                );
+                return (
+                  <section
+                    className="admin-product-category-group"
+                    key={category.value}
+                    aria-label={`Danh mục ${category.label}`}
+                  >
+                    <div className="admin-product-category-heading">
+                      <h4>{category.label}</h4>
+                      <span>{categoryProducts.length} món</span>
+                    </div>
+                    {categoryProducts.length === 0 ? (
+                      <p className="admin-product-category-empty">
+                        Chưa có sản phẩm trong danh mục này.
+                      </p>
+                    ) : (
+                      categoryProducts.map((item) => (
+                        <article className="admin-product-row" key={item.id}>
+                          <img src={item.image} alt={item.imageAlt} loading="lazy" />
+                          <div>
+                            <div className="admin-product-row-title">
+                              <strong>{item.name}</strong>
+                              {Boolean(item.bestSeller) && (
+                                <span className="best-seller-badge">Bán chạy</span>
+                              )}
+                            </div>
+                            <span className="price">
+                              {item.price.toLocaleString("vi-VN")}đ
+                            </span>
+                          </div>
+                          <div className="admin-product-row-actions">
+                            <button
+                              className="admin-product-edit"
+                              type="button"
+                              onClick={() => startEditing(item)}
+                              aria-label={`Chỉnh sửa ${item.name}`}
+                            >
+                              Sửa
+                            </button>
+                            <Link
+                              className="admin-product-view"
+                              to={getMenuItemPath(item)}
+                              aria-label={`Xem trang ${item.name}`}
+                            >
+                              ↗
+                            </Link>
+                          </div>
+                        </article>
+                      ))
                     )}
-                  </div>
-                  <span className="price">
-                    {item.price.toLocaleString("vi-VN")}đ
-                  </span>
-                </div>
-                <div className="admin-product-row-actions">
-                  <button
-                    className="admin-product-edit"
-                    type="button"
-                    onClick={() => startEditing(item)}
-                    aria-label={`Chỉnh sửa ${item.name}`}
-                  >
-                    Sửa
-                  </button>
-                  <Link
-                    className="admin-product-view"
-                    to={getMenuItemPath(item)}
-                    aria-label={`Xem trang ${item.name}`}
-                  >
-                    ↗
-                  </Link>
-                </div>
-              </article>
-            ))}
+                  </section>
+                );
+              })}
+            </div>
+          }
         </div>
       </div>
     </section>

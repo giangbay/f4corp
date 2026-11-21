@@ -276,8 +276,12 @@ export async function initializeDatabase() {
 
     CREATE TABLE IF NOT EXISTS orders (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT UNSIGNED NOT NULL,
-      status ENUM('pending', 'preparing', 'completed') NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      customer_name VARCHAR(120) NOT NULL,
+      customer_phone VARCHAR(40) NOT NULL,
+      fulfillment ENUM('dine_in', 'takeaway') NOT NULL,
+      table_number VARCHAR(20) NULL,
+      status ENUM('awaiting_payment', 'pending', 'preparing', 'completed') NOT NULL,
       total INT UNSIGNED NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT orders_user_fk FOREIGN KEY (user_id)
@@ -321,6 +325,51 @@ export async function initializeDatabase() {
   for (const statement of schema.split(";").map((item) => item.trim()).filter(Boolean)) {
     await database.query(statement);
   }
+
+  const [orderColumns] = await database.query("SHOW COLUMNS FROM orders");
+  const orderColumnNames = new Set(orderColumns.map(({ Field }) => Field));
+  const orderStatusColumn = orderColumns.find(({ Field }) => Field === "status");
+  if (!orderStatusColumn.Type.includes("'awaiting_payment'")) {
+    await database.query(`
+      ALTER TABLE orders
+      MODIFY status ENUM('awaiting_payment', 'pending', 'preparing', 'completed') NOT NULL
+    `);
+  }
+  if (orderColumns.find(({ Field }) => Field === "user_id")?.Null === "NO") {
+    await database.query("ALTER TABLE orders MODIFY user_id BIGINT UNSIGNED NULL");
+  }
+  if (!orderColumnNames.has("customer_name")) {
+    await database.query(
+      "ALTER TABLE orders ADD COLUMN customer_name VARCHAR(120) NOT NULL DEFAULT '' AFTER user_id",
+    );
+    await database.query(`
+      UPDATE orders
+      JOIN users ON users.id = orders.user_id
+      SET orders.customer_name = users.name
+      WHERE orders.customer_name = ''
+    `);
+  }
+  if (!orderColumnNames.has("customer_phone")) {
+    await database.query(
+      "ALTER TABLE orders ADD COLUMN customer_phone VARCHAR(40) NOT NULL DEFAULT '' AFTER customer_name",
+    );
+  }
+  if (!orderColumnNames.has("fulfillment")) {
+    await database.query(
+      "ALTER TABLE orders ADD COLUMN fulfillment ENUM('dine_in', 'takeaway') NOT NULL DEFAULT 'takeaway' AFTER customer_phone",
+    );
+  }
+  if (!orderColumnNames.has("table_number")) {
+    await database.query(
+      "ALTER TABLE orders ADD COLUMN table_number VARCHAR(20) NULL AFTER fulfillment",
+    );
+  }
+  await database.query(`
+    UPDATE orders
+    JOIN users ON users.id = orders.user_id
+    SET orders.customer_name = users.name
+    WHERE orders.customer_name = ''
+  `);
 
   const [categoryColumn] = await database.query(
     "SHOW COLUMNS FROM menu_items LIKE 'category'",
@@ -449,7 +498,9 @@ export async function initializeDatabase() {
     );
     if (Number(orderCountRows[0].count) === 0 && sampleUser) {
       const completedOrder = await seedExecute(
-        "INSERT INTO orders (user_id, status, total) VALUES (?, 'completed', ?)",
+        `INSERT INTO orders
+          (user_id, customer_name, customer_phone, fulfillment, status, total)
+         VALUES (?, 'Khách Mộc', '', 'takeaway', 'completed', ?)`,
         [sampleUser.id, 88000],
       );
       await seedExecute(
@@ -465,7 +516,9 @@ export async function initializeDatabase() {
         ],
       );
       const preparingOrder = await seedExecute(
-        "INSERT INTO orders (user_id, status, total) VALUES (?, 'preparing', ?)",
+        `INSERT INTO orders
+          (user_id, customer_name, customer_phone, fulfillment, status, total)
+         VALUES (?, 'Khách Mộc', '', 'takeaway', 'preparing', ?)`,
         [sampleUser.id, 55000],
       );
       await seedExecute(

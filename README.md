@@ -56,6 +56,13 @@ npm start
 - Trang chi tiết món hiển thị phần giới thiệu, điểm trung bình và nhận xét của
   khách hàng. Tài khoản khách hàng đã đăng nhập có thể gửi hoặc cập nhật một
   đánh giá cho mỗi món; tài khoản chưa đăng nhập chỉ xem được đánh giá.
+- Khách có thể thêm món vào đơn, chọn dùng tại quán hoặc mang đi và gửi đơn mà
+  không cần đăng nhập; nếu đang đăng nhập, đơn được gắn với tài khoản. Khu vực
+  đơn hàng mở từ nút nổi cạnh thanh cuộn. Sau khi gửi đơn, khách thấy thẻ QR
+  chuyển khoản nền xanh đang chờ ảnh QR của quán và trạng thái chờ thanh toán.
+- Nhân viên và quản trị viên xử lý đơn tại `/orders`, chuyển trạng thái từ chờ
+  thanh toán sang đã xác nhận, đang chuẩn bị rồi hoàn tất. Trang `/admin` hiển
+  thị tổng doanh thu chỉ tính các đơn đã hoàn tất.
 - Quản trị viên được khởi tạo bằng `ADMIN_EMAIL` và `ADMIN_PASSWORD` (tối thiểu
   14 ký tự). Không có tài khoản/mật khẩu quản trị mặc định; đặt hai biến này
   trong `.env` hoặc môi trường chạy, không đưa bí mật vào Git.
@@ -73,6 +80,10 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
 địa điểm, bài đăng, phiên đăng nhập và bình luận mẫu. API hiện tại gồm:
 
 - `GET /api/menu`
+- `POST /api/orders` (có thể dùng phiên đăng nhập; giá được xác thực từ thực
+  đơn phía máy chủ)
+- `GET /api/orders`, `PATCH /api/orders/:orderId/status` (yêu cầu phiên nhân
+  viên hoặc quản trị viên)
 - `GET /api/menu/:menuId/reviews`
 - `POST /api/menu/:menuId/reviews` (yêu cầu phiên khách hàng; gửi hoặc cập nhật
   điểm 1–5 sao và nhận xét)

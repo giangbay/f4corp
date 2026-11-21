@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import AdminPage from "./AdminPage.jsx";
 import ChatPage from "./ChatPage.jsx";
 import LoginPage from "./LoginPage.jsx";
+import OrdersPage from "./OrdersPage.jsx";
 import StaffSchedulePage from "./StaffSchedulePage.jsx";
 import ScrollProgress from "./components/ScrollProgress.jsx";
 import ScrollToLocation from "./components/ScrollToLocation.jsx";
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/shifts" element={<StaffSchedulePage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

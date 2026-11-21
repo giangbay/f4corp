@@ -108,6 +108,13 @@ const chatWriteLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Bạn đang gửi quá nhanh. Vui lòng chờ một chút." },
 });
+const orderWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Bạn đang đặt món quá nhanh. Vui lòng thử lại sau." },
+});
 
 const asyncRoute = (handler) => (request, response, next) => {
   Promise.resolve(handler(request, response, next)).catch(next);
@@ -362,6 +369,254 @@ app.get("/api/menu", asyncRoute(async (_request, response) => {
   `);
   response.json(items.map(normalizeMenuItem));
 }));
+
+app.post(
+  "/api/orders",
+  orderWriteLimiter,
+  asyncRoute(async (request, response) => {
+    const sessionUser = await getSessionUser(readSessionToken(request));
+    const customerName =
+      typeof request.body?.customerName === "string"
+        ? request.body.customerName.trim()
+        : sessionUser?.name ?? "";
+    const customerPhone =
+      typeof request.body?.customerPhone === "string"
+        ? request.body.customerPhone.trim()
+        : "";
+    const phoneDigits = customerPhone.replace(/\D/g, "");
+    const fulfillment = request.body?.fulfillment;
+    const tableNumber =
+      typeof request.body?.tableNumber === "string"
+        ? request.body.tableNumber.trim()
+        : "";
+    const requestedItems = request.body?.items;
+
+    if (customerName.length < 2 || customerName.length > 120) {
+      response.status(400).json({ error: "Tên người nhận cần có từ 2 đến 120 ký tự." });
+      return;
+    }
+    if (!/^[+\d().\s-]{7,40}$/.test(customerPhone) || phoneDigits.length < 7) {
+      response.status(400).json({ error: "Vui lòng nhập số điện thoại hợp lệ." });
+      return;
+    }
+    if (!["dine_in", "takeaway"].includes(fulfillment)) {
+      response.status(400).json({ error: "Vui lòng chọn tại quán hoặc mang đi." });
+      return;
+    }
+    if (
+      fulfillment === "dine_in" &&
+      (tableNumber.length < 1 || tableNumber.length > 20)
+    ) {
+      response.status(400).json({ error: "Vui lòng nhập số bàn từ 1 đến 20 ký tự." });
+      return;
+    }
+    if (!Array.isArray(requestedItems) || requestedItems.length < 1 || requestedItems.length > 30) {
+      response.status(400).json({ error: "Đơn hàng cần có từ 1 đến 30 món." });
+      return;
+    }
+
+    const quantities = new Map();
+    for (const requestedItem of requestedItems) {
+      const menuItemId = requestedItem?.menuItemId;
+      const quantity = requestedItem?.quantity;
+      if (
+        !Number.isSafeInteger(menuItemId) ||
+        menuItemId < 1 ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 20 ||
+        quantities.has(menuItemId)
+      ) {
+        response.status(400).json({ error: "Danh sách món trong đơn không hợp lệ." });
+        return;
+      }
+      quantities.set(menuItemId, quantity);
+    }
+
+    const menuItemIds = [...quantities.keys()];
+    const placeholders = menuItemIds.map(() => "?").join(", ");
+    const menuItems = await many(
+      `SELECT id, name, price FROM menu_items WHERE id IN (${placeholders})`,
+      menuItemIds,
+    );
+    if (menuItems.length !== menuItemIds.length) {
+      response.status(400).json({ error: "Một hoặc nhiều món không còn trong thực đơn." });
+      return;
+    }
+
+    const orderItems = menuItems.map((menuItem) => ({
+      name: menuItem.name,
+      quantity: quantities.get(Number(menuItem.id)),
+      unitPrice: Number(menuItem.price),
+    }));
+    const total = orderItems.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0,
+    );
+    if (!Number.isSafeInteger(total) || total < 1 || total > 4_294_967_295) {
+      response.status(400).json({ error: "Tổng giá trị đơn hàng không hợp lệ." });
+      return;
+    }
+
+    const connection = await database.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.execute(
+        `INSERT INTO orders
+          (user_id, customer_name, customer_phone, fulfillment, table_number, status, total)
+          VALUES (?, ?, ?, ?, ?, 'awaiting_payment', ?)`,
+        [
+          sessionUser?.id ?? null,
+          customerName,
+          customerPhone,
+          fulfillment,
+          fulfillment === "dine_in" ? tableNumber : null,
+          total,
+        ],
+      );
+      for (const item of orderItems) {
+        await connection.execute(
+          `INSERT INTO order_items (order_id, item_name, quantity, unit_price)
+           VALUES (?, ?, ?, ?)`,
+          [result.insertId, item.name, item.quantity, item.unitPrice],
+        );
+      }
+      await connection.commit();
+      response.status(201).json({
+        id: Number(result.insertId),
+        status: "awaiting_payment",
+        total,
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }),
+);
+
+app.get(
+  "/api/orders",
+  requireAuth,
+  requireStaffOrAdmin,
+  asyncRoute(async (request, response) => {
+    const orders = await many(`
+      SELECT id, customer_name AS customerName, customer_phone AS customerPhone,
+        fulfillment, table_number AS tableNumber, status, total,
+        created_at AS createdAt
+      FROM orders
+      ORDER BY FIELD(status, 'awaiting_payment', 'pending', 'preparing', 'completed'),
+        created_at DESC, id DESC
+      LIMIT 100
+    `);
+    const orderIds = orders.map((order) => Number(order.id));
+    const orderItems = orderIds.length
+      ? await many(
+          `SELECT order_id AS orderId, item_name AS name, quantity,
+            unit_price AS unitPrice
+          FROM order_items
+          WHERE order_id IN (${orderIds.map(() => "?").join(", ")})
+          ORDER BY id`,
+          orderIds,
+        )
+      : [];
+    const itemsByOrder = new Map();
+    for (const item of orderItems) {
+      const orderId = Number(item.orderId);
+      const items = itemsByOrder.get(orderId) ?? [];
+      items.push({
+        name: item.name,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+      });
+      itemsByOrder.set(orderId, items);
+    }
+    const [revenue, completedTransactions] = request.user.role === "admin"
+      ? await Promise.all([
+          one(`
+            SELECT COALESCE(SUM(total), 0) AS total,
+              COUNT(*) AS completedOrders
+            FROM orders
+            WHERE status = 'completed'
+          `),
+          many(`
+            SELECT id, customer_name AS customerName,
+              customer_phone AS customerPhone, fulfillment,
+              table_number AS tableNumber, total, created_at AS createdAt
+            FROM orders
+            WHERE status = 'completed'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+          `),
+        ])
+      : [null, null];
+
+    response.setHeader("Cache-Control", "no-store");
+    response.json({
+      orders: orders.map((order) => ({
+        ...order,
+        id: Number(order.id),
+        total: Number(order.total),
+        items: itemsByOrder.get(Number(order.id)) ?? [],
+      })),
+      revenue: revenue
+        ? {
+            total: Number(revenue.total),
+            completedOrders: Number(revenue.completedOrders),
+            transactions: completedTransactions.map((transaction) => ({
+              ...transaction,
+              id: Number(transaction.id),
+              total: Number(transaction.total),
+            })),
+          }
+        : null,
+    });
+  }),
+);
+
+app.patch(
+  "/api/orders/:orderId/status",
+  requireAuth,
+  requireStaffOrAdmin,
+  asyncRoute(async (request, response) => {
+    const orderId = Number(request.params.orderId);
+    const nextStatus = request.body?.status;
+    if (!Number.isSafeInteger(orderId) || orderId < 1) {
+      response.status(400).json({ error: "Đơn hàng không hợp lệ." });
+      return;
+    }
+    if (!["pending", "preparing", "completed"].includes(nextStatus)) {
+      response.status(400).json({ error: "Trạng thái đơn hàng không hợp lệ." });
+      return;
+    }
+
+    const existing = await one("SELECT status FROM orders WHERE id = ?", [orderId]);
+    if (!existing) {
+      response.status(404).json({ error: "Không tìm thấy đơn hàng." });
+      return;
+    }
+    const allowedNextStatus = {
+      awaiting_payment: "pending",
+      pending: "preparing",
+      preparing: "completed",
+    }[existing.status];
+    if (nextStatus !== allowedNextStatus) {
+      response.status(409).json({ error: "Đơn hàng đã được cập nhật hoặc không thể đổi trạng thái này." });
+      return;
+    }
+
+    const result = await execute(
+      "UPDATE orders SET status = ? WHERE id = ? AND status = ?",
+      [nextStatus, orderId, existing.status],
+    );
+    if (result.affectedRows !== 1) {
+      response.status(409).json({ error: "Đơn hàng vừa được cập nhật bởi người khác." });
+      return;
+    }
+    response.json({ id: orderId, status: nextStatus });
+  }),
+);
 
 app.get(
   "/api/menu/:menuId/reviews",

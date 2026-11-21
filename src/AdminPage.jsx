@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import AdminMenuSection from "./AdminMenuSection.jsx";
+import OrderManagementSection from "./OrderManagementSection.jsx";
 import { fetchApi } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
 
@@ -71,6 +72,7 @@ export default function AdminPage() {
         <nav className="admin-nav" aria-label="Điều hướng quản trị">
           <a href="#admin-overview">Tổng quan</a>
           <a href="#admin-menu">Sản phẩm menu</a>
+          <a href="#admin-orders">Đơn hàng & doanh thu</a>
           <a href="#admin-staff">Nhân sự</a>
           <a href="#admin-accounts">Tài khoản</a>
         </nav>
@@ -93,6 +95,7 @@ export default function AdminPage() {
           </article>
         </div>
         <AdminMenuSection />
+        <OrderManagementSection id="admin-orders" />
         <section className="admin-users" id="admin-staff">
           <h2>Tạo tài khoản nhân viên</h2>
           <form className="admin-staff-form" onSubmit={handleCreateStaff}>

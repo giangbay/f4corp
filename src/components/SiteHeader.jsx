@@ -100,6 +100,9 @@ export default function SiteHeader() {
             Không gian
           </Link>
           <NavLink to="/shifts">Đăng ký giờ làm</NavLink>
+          {["staff", "admin"].includes(user?.role) && (
+            <NavLink to="/orders">Đơn hàng</NavLink>
+          )}
           {user?.role === "admin" && <NavLink to="/admin">Quản trị</NavLink>}
           {user ? (
             <button
