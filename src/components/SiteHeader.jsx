@@ -162,7 +162,9 @@ export default function SiteHeader() {
                     : "Khách hàng"}
               </span>
             </div>
-            <NavLink to="/shifts">Lịch đăng ký ca</NavLink>
+            {["staff", "admin"].includes(user.role) && (
+              <NavLink to="/shifts">Lịch đăng ký ca</NavLink>
+            )}
             {["staff", "admin"].includes(user.role) && (
               <NavLink to="/orders">Đơn hàng</NavLink>
             )}

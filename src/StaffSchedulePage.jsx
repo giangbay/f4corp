@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { fetchApi, useApiResource } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
@@ -40,7 +40,26 @@ function getScheduleDates(today) {
 }
 
 export default function StaffSchedulePage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <section className="staff-shifts">
+        <p className="resource-message">Đang xác minh tài khoản…</p>
+      </section>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: "/shifts" }} />;
+  }
+  if (!["staff", "admin"].includes(user.role)) {
+    return <Navigate to="/chat" replace />;
+  }
+
+  return <StaffScheduleContent user={user} />;
+}
+
+function StaffScheduleContent({ user }) {
   const { data: shifts, loading, error } = useApiResource("/staff-shifts");
   const [savedShifts, setSavedShifts] = useState([]);
   const [note, setNote] = useState("");

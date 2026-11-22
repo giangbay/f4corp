@@ -47,7 +47,8 @@ npm start
   khẩu được băm bằng scrypt.
 - Quản trị viên tạo tài khoản nhân viên trong trang `/admin`. Nhân viên đăng
   nhập để đăng ký giờ làm tại `/shifts`; nhân viên và quản trị viên đã đăng
-  nhập đều có thể đăng ký. Bảng lịch có thể xem công khai. Nhân viên xem lịch
+  nhập đều có thể đăng ký. Chỉ nhân viên và quản trị viên được xem trang và
+  dữ liệu lịch làm. Nhân viên xem lịch
   theo từng ngày trong 7 ngày tới, vuốt để xem ngày liền kề và xem lại hai ngày
   trước; chỉ được đăng ký ca chưa qua trong khung 7 ngày. Nhân viên xem lịch
   công theo tháng và lương tạm tính của mình; quản trị viên xem toàn bộ nhân
@@ -111,8 +112,9 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
 - `GET /api/comments`
 - `GET /api/blog`, `GET /api/blog/:blogId`, `POST /api/blog` (POST yêu cầu
   phiên quản trị viên)
-- `GET /api/staff-shifts` (lịch chung; thêm `?month=YYYY-MM` để nhân viên xem
-  bảng công của mình hoặc quản trị viên xem toàn bộ)
+- `GET /api/staff-shifts` (yêu cầu phiên nhân viên hoặc quản trị viên; thêm
+  `?month=YYYY-MM` để nhân viên xem bảng công của mình hoặc quản trị viên xem
+  toàn bộ)
 - `POST /api/staff-shifts` (yêu cầu tài khoản nhân viên hoặc quản trị viên),
 - `POST /api/staff-shifts/:shiftId/check-in` và
   `POST /api/staff-shifts/:shiftId/check-out` (nhân viên chấm công cho ca của

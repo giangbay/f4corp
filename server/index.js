@@ -979,12 +979,8 @@ app.post(
 
 app.get(
   "/api/staff-shifts",
-  (request, response, next) => {
-    if (request.query.month !== undefined) {
-      return requireAuth(request, response, next);
-    }
-    next();
-  },
+  requireAuth,
+  requireStaffOrAdmin,
   asyncRoute(async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
     const hasMonth = request.query.month !== undefined;
