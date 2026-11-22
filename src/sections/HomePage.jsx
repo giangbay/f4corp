@@ -32,8 +32,17 @@ export default function HomePage() {
       <div className="hero-visual">
         <img
           className="hero-image"
-          src="https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=85"
+          src="https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=75"
+          srcSet={[
+            "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=480&q=75 480w",
+            "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=768&q=75 768w",
+            "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=75 1200w",
+          ].join(", ")}
+          sizes="(max-width: 576px) calc(100vw - 54px), (max-width: 760px) 522px, (max-width: 1168px) 50vw, 560px"
           alt="Tách cà phê được pha trong không gian ấm áp"
+          width="1200"
+          height="800"
+          fetchPriority="high"
         />
         <div className="image-caption">
           <span className="caption-icon" aria-hidden="true">
