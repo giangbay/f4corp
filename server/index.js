@@ -127,6 +127,7 @@ app.disable("x-powered-by");
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
+      "frame-src": ["'self'", "https://www.google.com", "https://*.google.com"],
       "default-src": ["'self'"],
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       "font-src": ["'self'", "https://fonts.gstatic.com"],
