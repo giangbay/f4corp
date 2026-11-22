@@ -3,7 +3,6 @@ import { Link, Navigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { fetchApi, useApiResource } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
-import StaffPayrollSection from "./StaffPayrollSection.jsx";
 
 const SHIFT_OPTIONS = [
   { name: "Sáng", tone: "morning", startTime: "07:00", endTime: "12:00" },
@@ -209,6 +208,9 @@ function StaffScheduleContent({ user }) {
             Đăng ký ca trong 7 ngày tới. Có thể xem thêm 2 ngày vừa qua;
             mỗi ca tối đa 2 nhân viên.
           </p>
+          <Link className="button button-outline" to={user.role === "admin" ? "/admin/payroll" : "/payroll"}>
+            Xem bảng công & lương
+          </Link>
         </header>
         <div className="shift-content">
           <section className="shift-board" aria-labelledby="shift-board-title">
@@ -447,9 +449,6 @@ function StaffScheduleContent({ user }) {
             )}
           </section>
         </div>
-        {user && ["staff", "admin"].includes(user.role) && (
-          <StaffPayrollSection />
-        )}
       </div>
     </section>
   );

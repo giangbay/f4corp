@@ -21,8 +21,8 @@ export default function OrdersPage() {
             <p>Tiếp nhận món khách đặt và cập nhật tiến độ phục vụ.</p>
           </div>
           {user.role === "admin" && (
-            <Link className="button button-outline" to="/admin#admin-orders">
-              Bảng quản trị
+            <Link className="button button-outline" to="/admin/orders">
+              Quản trị đơn hàng
             </Link>
           )}
         </div>

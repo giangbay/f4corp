@@ -162,13 +162,22 @@ export default function SiteHeader() {
                     : "Khách hàng"}
               </span>
             </div>
-            {["staff", "admin"].includes(user.role) && (
-              <NavLink to="/shifts">Lịch đăng ký ca</NavLink>
+            {user.role === "customer" && <NavLink to="/chat">Cộng đồng</NavLink>}
+            {user.role === "staff" && (
+              <>
+                <NavLink to="/shifts">Đăng ký ca</NavLink>
+                <NavLink to="/payroll">Bảng công & lương</NavLink>
+                <NavLink to="/orders">Đơn hàng</NavLink>
+              </>
             )}
-            {["staff", "admin"].includes(user.role) && (
-              <NavLink to="/orders">Đơn hàng</NavLink>
+            {user.role === "admin" && (
+              <>
+                <NavLink to="/admin" end>Bảng quản trị</NavLink>
+                <NavLink to="/admin/orders">Đơn hàng</NavLink>
+                <NavLink to="/admin/payroll">Bảng công & lương</NavLink>
+                <NavLink to="/shifts">Lịch đăng ký ca</NavLink>
+              </>
             )}
-            {user.role === "admin" && <NavLink to="/admin">Quản trị</NavLink>}
             <button
               className="account-menu-sign-out"
               type="button"

@@ -1,8 +1,15 @@
 import { Route, Routes } from "react-router-dom";
+import AdminMenuSection from "./AdminMenuSection.jsx";
+import OrderManagementSection from "./OrderManagementSection.jsx";
+import AdminAccountsPage from "./AdminAccountsPage.jsx";
+import AdminDashboardPage from "./AdminDashboardPage.jsx";
+import AdminRevenuePage from "./AdminRevenuePage.jsx";
+import AdminStaffPage from "./AdminStaffPage.jsx";
 import AdminPage from "./AdminPage.jsx";
 import ChatPage from "./ChatPage.jsx";
 import LoginPage from "./LoginPage.jsx";
 import OrdersPage from "./OrdersPage.jsx";
+import StaffPayrollPage from "./StaffPayrollPage.jsx";
 import StaffSchedulePage from "./StaffSchedulePage.jsx";
 import ScrollProgress from "./components/ScrollProgress.jsx";
 import ScrollToLocation from "./components/ScrollToLocation.jsx";
@@ -37,12 +44,29 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/shifts" element={<StaffSchedulePage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<AdminPage />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="menu" element={<AdminMenuPage />} />
+            <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="revenue" element={<AdminRevenuePage />} />
+            <Route path="payroll" element={<StaffPayrollPage />} />
+            <Route path="staff" element={<AdminStaffPage />} />
+            <Route path="accounts" element={<AdminAccountsPage />} />
+          </Route>
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/payroll" element={<StaffPayrollPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
       <SiteFooter />
     </OrderProvider>
   );
+}
+
+function AdminMenuPage() {
+  return <AdminMenuSection />;
+}
+
+function AdminOrdersPage() {
+  return <OrderManagementSection />;
 }

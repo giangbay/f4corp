@@ -45,10 +45,15 @@ npm start
 
 - Khách hàng tạo tài khoản tại `/login`; vai trò được gán phía máy chủ và mật
   khẩu được băm bằng scrypt.
-- Quản trị viên tạo tài khoản nhân viên trong trang `/admin`. Nhân viên đăng
-  nhập để đăng ký giờ làm tại `/shifts`; nhân viên và quản trị viên đã đăng
-  nhập đều có thể đăng ký. Chỉ nhân viên và quản trị viên được xem trang và
-  dữ liệu lịch làm. Nhân viên xem lịch
+- Khu quản trị chia theo từng trang, có danh sách điều hướng tại `/admin`:
+  tổng quan, `/admin/menu`, `/admin/orders`, `/admin/revenue`,
+  `/admin/payroll`, `/admin/staff` và `/admin/accounts`. Quản trị viên tạo
+  tài khoản nhân viên tại `/admin/staff`; danh sách tài khoản ở trang riêng.
+- Nhân viên đăng nhập để đăng ký giờ làm tại `/shifts`, xem bảng công riêng ở
+  `/payroll` và xử lý đơn tại `/orders`. Menu tài khoản hiển thị chức năng phù
+  hợp với vai trò; khách hàng có liên kết đến cộng đồng. Nhân viên và quản trị
+  viên đã đăng nhập đều có thể đăng ký ca. Chỉ nhân viên và quản trị viên
+  được xem trang và dữ liệu lịch làm. Nhân viên xem lịch
   theo từng ngày trong 7 ngày tới, vuốt để xem ngày liền kề và xem lại hai ngày
   trước; chỉ được đăng ký ca chưa qua trong khung 7 ngày. Nhân viên xem lịch
   công theo tháng và lương tạm tính của mình; quản trị viên xem toàn bộ nhân
@@ -58,7 +63,7 @@ npm start
   chuẩn tối đa 5 giờ tính 20.000đ/giờ; phần thời gian vượt 5 giờ tính
   30.000đ/giờ. Ca chỉ được tính lương sau khi có đủ check-in/check-out và được
   quản trị viên xác nhận.
-- Trang `/admin` có điều hướng quản trị và form đăng món mới, xem trước ảnh,
+- Trang `/admin/menu` có form đăng món mới, xem trước ảnh,
   giới thiệu chi tiết từ 1.001 ký tự, thư viện đúng 3 ảnh, danh sách món hiện
   tại, chỉnh sửa sản phẩm và tùy chọn đánh dấu món bán chạy. Sản phẩm được
   phân vào một trong bốn danh mục: nước ép, cà phê, sinh tố hoặc trà sữa. Món
@@ -75,9 +80,10 @@ npm start
   không cần đăng nhập; nếu đang đăng nhập, đơn được gắn với tài khoản. Khu vực
   đơn hàng mở từ nút nổi cạnh thanh cuộn. Sau khi gửi đơn, khách thấy thẻ QR
   chuyển khoản nền xanh đang chờ ảnh QR của quán và trạng thái chờ thanh toán.
-- Nhân viên và quản trị viên xử lý đơn tại `/orders`, chuyển trạng thái từ chờ
-  thanh toán sang đã xác nhận, đang chuẩn bị rồi hoàn tất. Trang `/admin` hiển
-  thị tổng doanh thu chỉ tính các đơn đã hoàn tất.
+- Nhân viên xử lý đơn tại `/orders` và quản trị viên tại `/admin/orders`,
+  chuyển trạng thái từ chờ thanh toán sang đã xác nhận, đang chuẩn bị rồi hoàn
+  tất. Trang `/admin/revenue` hiển thị tổng doanh thu chỉ tính các đơn đã hoàn
+  tất.
 - Quản trị viên được khởi tạo bằng `ADMIN_EMAIL` và `ADMIN_PASSWORD` (tối thiểu
   14 ký tự). Không có tài khoản/mật khẩu quản trị mặc định; đặt hai biến này
   trong `.env` hoặc môi trường chạy, không đưa bí mật vào Git.
@@ -85,7 +91,7 @@ npm start
   production cookie được đánh dấu `Secure`.
 - Bảng chat tại `/chat` cập nhật bài đăng và bình luận qua Socket.IO. Người dùng
   chỉ xóa bài của mình; quản trị viên có thể xóa bài và bình luận. Trang
-  `/admin` hiển thị danh sách tài khoản.
+  `/admin/accounts` hiển thị danh sách tài khoản.
 - Việc tạo tài khoản và đăng nhập được giới hạn tần suất. Các thao tác ghi API
   yêu cầu header cùng nguồn; không bật CORS công khai.
 
