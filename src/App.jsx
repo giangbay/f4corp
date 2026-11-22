@@ -1,9 +1,14 @@
-import { Route, Routes } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
+import { fetchApi } from "./api.js";
+import AdminAnalyticsPage from "./AdminAnalyticsPage.jsx";
 import AdminMenuSection from "./AdminMenuSection.jsx";
 import OrderManagementSection from "./OrderManagementSection.jsx";
 import AdminAccountsPage from "./AdminAccountsPage.jsx";
 import AdminDashboardPage from "./AdminDashboardPage.jsx";
+import AdminHealthPage from "./AdminHealthPage.jsx";
 import AdminRevenuePage from "./AdminRevenuePage.jsx";
+import AdminSeoPage from "./AdminSeoPage.jsx";
 import AdminStaffPage from "./AdminStaffPage.jsx";
 import AdminPage from "./AdminPage.jsx";
 import ChatPage from "./ChatPage.jsx";
@@ -28,6 +33,7 @@ import VisitPage from "./sections/VisitPage.jsx";
 export default function App() {
   return (
     <OrderProvider>
+      <PageViewTracker />
       <ScrollProgress />
       <ScrollToLocation />
       <SiteHeader />
@@ -49,6 +55,9 @@ export default function App() {
             <Route path="menu" element={<AdminMenuPage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
             <Route path="revenue" element={<AdminRevenuePage />} />
+            <Route path="health" element={<AdminHealthPage />} />
+            <Route path="seo" element={<AdminSeoPage />} />
+            <Route path="analytics" element={<AdminAnalyticsPage />} />
             <Route path="payroll" element={<StaffPayrollPage />} />
             <Route path="staff" element={<AdminStaffPage />} />
             <Route path="accounts" element={<AdminAccountsPage />} />
@@ -61,6 +70,26 @@ export default function App() {
       <SiteFooter />
     </OrderProvider>
   );
+}
+
+function PageViewTracker() {
+  const { pathname } = useLocation();
+  const lastPath = useRef("");
+
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (/^\/(admin|login|chat|shifts|orders|payroll)(\/|$)/.test(pathname)) return;
+
+    fetchApi("/analytics/page-view", {
+      method: "POST",
+      body: JSON.stringify({ path: pathname }),
+    }).catch((error) => {
+      console.error("Could not record the page view.", error);
+    });
+  }, [pathname]);
+
+  return null;
 }
 
 function AdminMenuPage() {

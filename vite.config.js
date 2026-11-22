@@ -15,7 +15,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://localhost:3001",
+      "/api": {
+        target: "http://localhost:3001",
+        configure: forwardPublicHost,
+      },
       "/sitemap.xml": {
         target: "http://localhost:3001",
         configure: forwardPublicHost,

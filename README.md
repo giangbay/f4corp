@@ -47,8 +47,11 @@ npm start
   khẩu được băm bằng scrypt.
 - Khu quản trị chia theo từng trang, có danh sách điều hướng tại `/admin`:
   tổng quan, `/admin/menu`, `/admin/orders`, `/admin/revenue`,
-  `/admin/payroll`, `/admin/staff` và `/admin/accounts`. Quản trị viên tạo
-  tài khoản nhân viên tại `/admin/staff`; danh sách tài khoản ở trang riêng.
+  `/admin/health`, `/admin/seo`, `/admin/analytics`, `/admin/payroll`,
+  `/admin/staff` và `/admin/accounts`. Quản trị viên tạo tài khoản nhân viên
+  tại `/admin/staff`; danh sách tài khoản ở trang riêng. Trang sức khỏe kiểm
+  tra API và database; SEO hiển thị domain, sitemap, robots.txt và tình trạng
+  metadata; lượt truy cập là lượt xem trang, không phải khách duy nhất.
 - Nhân viên đăng nhập để đăng ký giờ làm tại `/shifts`, xem bảng công riêng ở
   `/payroll` và xử lý đơn tại `/orders`. Menu tài khoản hiển thị chức năng phù
   hợp với vai trò; khách hàng có liên kết đến cộng đồng. Nhân viên và quản trị
@@ -57,8 +60,10 @@ npm start
   theo từng ngày trong 7 ngày tới, vuốt để xem ngày liền kề và xem lại hai ngày
   trước; chỉ được đăng ký ca chưa qua trong khung 7 ngày. Nhân viên xem lịch
   công theo tháng và lương tạm tính của mình; quản trị viên xem toàn bộ nhân
-  sự, sửa giờ chấm công và xác nhận ca đã làm. Trong ngày của ca, nhân viên
-  check-in từ giờ bắt đầu ca đến giờ kết thúc, rồi check-out khi làm xong.
+  sự và xác nhận ngày công. Lịch đăng ký cần quản trị viên xác nhận trước khi
+  nhân viên check-in; nút check-in chỉ mở trong ngày ca từ giờ bắt đầu đến giờ
+  kết thúc. Nhân viên checkout trong ngày làm, sau đó quản trị viên xác nhận
+  ngày công.
   Tổng thời gian tính từ check-in đến check-out, không tự trừ giờ nghỉ. Mỗi ca
   chuẩn tối đa 5 giờ tính 20.000đ/giờ; phần thời gian vượt 5 giờ tính
   30.000đ/giờ. Ca chỉ được tính lương sau khi có đủ check-in/check-out và được
@@ -130,6 +135,10 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
   trị viên; duyệt hoặc bỏ duyệt ca)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`,
   `GET /api/auth/me`
+- `GET /api/admin/website/health`, `GET /api/admin/website/seo` và
+  `GET /api/admin/analytics/page-views` (yêu cầu phiên admin)
+- `POST /api/analytics/page-view` (ghi lượt xem theo ngày và đường dẫn; không
+  lưu IP hoặc thông tin nhận dạng cá nhân, bỏ qua các trang quản trị/đăng nhập)
 - `GET /api/posts`, `POST /api/posts`, `POST /api/posts/:postId/comments`,
   `POST /api/admin/staff` (yêu cầu phiên admin)
 - Các thao tác quản trị tài khoản/bình luận yêu cầu phiên admin.

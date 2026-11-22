@@ -174,6 +174,9 @@ export default function SiteHeader() {
               <>
                 <NavLink to="/admin" end>Bảng quản trị</NavLink>
                 <NavLink to="/admin/orders">Đơn hàng</NavLink>
+                <NavLink to="/admin/health">Sức khỏe website</NavLink>
+                <NavLink to="/admin/seo">Tình trạng SEO</NavLink>
+                <NavLink to="/admin/analytics">Lượt truy cập</NavLink>
                 <NavLink to="/admin/payroll">Bảng công & lương</NavLink>
                 <NavLink to="/shifts">Lịch đăng ký ca</NavLink>
               </>

@@ -173,6 +173,8 @@ img {
   width: min(260px, calc(100vw - 36px));
   gap: 0;
   padding: 8px 16px 12px;
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
   border: 1px solid var(--line);
   background: var(--paper);
   box-shadow: 0 14px 28px #26352c12;
@@ -3018,6 +3020,318 @@ img {
   margin-top: 20px;
 }
 
+.admin-insight-page {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-health-summary,
+.admin-health-service,
+.admin-seo-overview,
+.admin-seo-check,
+.admin-analytics-totals article,
+.admin-analytics-chart,
+.admin-analytics-pages {
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.admin-health-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+}
+
+.admin-health-summary.is-degraded {
+  border-color: #e4c990;
+  background: #fff9e9;
+}
+
+.admin-health-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-health-services {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-health-service {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+.admin-health-service > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-health-service h3,
+.admin-seo-check h3,
+.admin-analytics-chart h3,
+.admin-analytics-pages h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.admin-health-service p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.admin-health-indicator {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #b15a37;
+}
+
+.admin-health-indicator.is-ok {
+  background: #4a7c50;
+  box-shadow: 0 0 0 4px #4a7c501a;
+}
+
+.admin-status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 99px;
+  background: #e7efe6;
+  color: #355a39;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-status-pill.is-warning,
+.admin-seo-check.is-warning .admin-status-pill {
+  background: #fbf0d7;
+  color: #815c18;
+}
+
+.admin-status-pill.is-error,
+.admin-status-pill.is-unavailable {
+  background: #f7e5df;
+  color: #963f2d;
+}
+
+.admin-seo-overview {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.6fr) minmax(0, 1.4fr);
+  gap: 12px 24px;
+  padding: 20px;
+}
+
+.admin-seo-overview > div {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.admin-seo-overview > div > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-seo-overview > div > strong {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.admin-seo-overview .admin-seo-domain {
+  overflow-wrap: anywhere;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-seo-overview > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-seo-checks {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-seo-check {
+  padding: 18px 20px;
+}
+
+.admin-seo-check-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-seo-check p {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.admin-seo-check a {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.admin-seo-disclaimer,
+.admin-analytics-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.admin-analytics-range {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.admin-analytics-range select {
+  min-width: 130px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.admin-analytics-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-analytics-totals article {
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.admin-analytics-totals span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-analytics-totals strong {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.admin-analytics-chart,
+.admin-analytics-pages {
+  padding: 20px;
+}
+
+.admin-analytics-chart > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.admin-analytics-chart > header > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-analytics-chart ol,
+.admin-analytics-pages ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-analytics-chart ol {
+  max-height: 470px;
+  overflow-y: auto;
+}
+
+.admin-analytics-chart li {
+  display: grid;
+  grid-template-columns: 58px minmax(60px, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.admin-analytics-chart time {
+  color: var(--muted);
+}
+
+.admin-analytics-chart li > strong,
+.admin-analytics-pages li > strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-analytics-bar {
+  display: block;
+  height: 9px;
+  overflow: hidden;
+  background: #efeee8;
+}
+
+.admin-analytics-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+
+.admin-analytics-pages h3 {
+  margin-bottom: 14px;
+}
+
+.admin-analytics-pages li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.admin-analytics-pages code {
+  overflow-wrap: anywhere;
+  color: var(--green);
+}
+
+.admin-analytics-pages li > strong {
+  flex: 0 0 auto;
+}
+
 .admin-menu-section {
   margin-bottom: 28px;
   padding: clamp(18px, 3vw, 30px);
@@ -3921,6 +4235,228 @@ img {
   opacity: 0.45;
 }
 
+.shift-approval-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 7px;
+  background: #f3eddf;
+  color: #806132;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.shift-approval-badge.is-approved {
+  background: #e8eee7;
+  color: var(--green);
+}
+
+.shift-approve-button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--green);
+  background: var(--paper);
+  color: var(--green);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shift-approve-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.staff-payroll-page {
+  display: grid;
+  gap: 24px;
+  padding-block: 14px 40px;
+}
+
+.staff-payroll-heading {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.staff-payroll-heading h1 {
+  margin: 8px 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 500;
+}
+
+.staff-payroll-toolbar label {
+  display: grid;
+  width: fit-content;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.staff-payroll-toolbar input {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+}
+
+.payroll-summary-grid,
+.payroll-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.payroll-summary-grid article,
+.payroll-staff-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.payroll-summary-grid span,
+.payroll-staff-grid span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.payroll-summary-grid strong {
+  color: var(--green);
+  font-size: 19px;
+}
+
+.payroll-staff-summary,
+.attendance-list {
+  display: grid;
+  gap: 14px;
+}
+
+.payroll-staff-summary h2,
+.attendance-list-heading h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.payroll-staff-grid article > strong,
+.payroll-staff-grid article > b {
+  color: var(--green);
+}
+
+.attendance-list-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.attendance-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+
+.attendance-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.attendance-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.attendance-card-date,
+.attendance-card-header h3,
+.attendance-card-staff,
+.attendance-card-detail,
+.attendance-card-pay {
+  margin: 0;
+}
+
+.attendance-card-date,
+.attendance-card-staff {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.attendance-card-header h3 {
+  margin-top: 3px;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.attendance-status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  background: #f3eddf;
+  color: #806132;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.attendance-status.is-complete {
+  background: #e8eee7;
+  color: var(--green);
+}
+
+.attendance-card-detail {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.attendance-card-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 10px;
+}
+
+.attendance-card-times span {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.attendance-card-times strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.attendance-card-pay {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.attendance-card-pay strong {
+  color: var(--green);
+}
+
+.attendance-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attendance-card-actions .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 [id] {
   scroll-margin-top: 100px;
 }
@@ -4321,6 +4857,21 @@ img {
   }
 
   .admin-account-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-health-services,
+  .admin-analytics-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-health-summary,
+  .admin-analytics-chart > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-seo-overview {
     grid-template-columns: 1fr;
   }
 

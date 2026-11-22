@@ -89,6 +89,13 @@ function getVietnamDate(date = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function shiftVietnamDate(date, offsetDays) {
+  const [year, month, day] = date.split("-").map(Number);
+  const shiftedDate = new Date(Date.UTC(year, month - 1, day));
+  shiftedDate.setUTCDate(shiftedDate.getUTCDate() + offsetDays);
+  return shiftedDate.toISOString().slice(0, 10);
+}
+
 function getVietnamRegistrationEnd(date = getVietnamDate()) {
   const [year, month, day] = date.split("-").map(Number);
   const registrationEnd = new Date(Date.UTC(year, month - 1, day));
@@ -117,6 +124,7 @@ async function getStaffAttendance(shiftId) {
       DATE_FORMAT(check_out_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkOutAt,
       IF(check_in_at IS NOT NULL AND check_out_at IS NOT NULL,
         TIMESTAMPDIFF(MINUTE, check_in_at, check_out_at), NULL) AS workedMinutes,
+      is_approved AS isApproved,
       is_completed AS isCompleted
     FROM staff_shifts
     WHERE id = ?
@@ -173,6 +181,13 @@ const chatWriteLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Bạn đang gửi quá nhanh. Vui lòng chờ một chút." },
+});
+const pageViewLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 90,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Đã ghi nhận quá nhiều lượt xem. Vui lòng thử lại sau." },
 });
 const orderWriteLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -337,6 +352,51 @@ io.on("connection", (socket) => {
 app.get("/api/auth/me", asyncRoute(async (request, response) => {
   response.json({ user: await getSessionUser(readSessionToken(request)) });
 }));
+
+app.post(
+  "/api/analytics/page-view",
+  pageViewLimiter,
+  asyncRoute(async (request, response) => {
+    const rawPath = request.body?.path;
+    if (
+      typeof rawPath !== "string" ||
+      !rawPath.startsWith("/") ||
+      rawPath.length > 500
+    ) {
+      response.status(400).json({ error: "Đường dẫn trang không hợp lệ." });
+      return;
+    }
+
+    let path;
+    try {
+      const parsedPath = new URL(rawPath, "http://localhost");
+      if (parsedPath.origin !== "http://localhost") {
+        response.status(400).json({ error: "Đường dẫn trang không hợp lệ." });
+        return;
+      }
+      path = parsedPath.pathname;
+    } catch {
+      response.status(400).json({ error: "Đường dẫn trang không hợp lệ." });
+      return;
+    }
+
+    if (path.length > 300) {
+      response.status(400).json({ error: "Đường dẫn trang quá dài." });
+      return;
+    }
+    if (/^\/(admin|login|chat|shifts|orders|payroll)(\/|$)/.test(path)) {
+      response.status(204).end();
+      return;
+    }
+
+    await execute(`
+      INSERT INTO site_page_views (view_date, path, views)
+      VALUES (?, ?, 1)
+      ON DUPLICATE KEY UPDATE views = views + 1
+    `, [getVietnamDate(), path]);
+    response.status(204).end();
+  }),
+);
 
 app.post(
   "/api/auth/register",
@@ -1032,15 +1092,16 @@ app.get(
         DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
         TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
         TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
-        staff_shifts.note, staff_shifts.is_completed AS isCompleted,
-        ${month ? `users.role AS staffRole,
-        staff_shifts.overtime_minutes AS overtimeMinutes,
-        staff_shifts.completed_at AS completedAt,
+        staff_shifts.note, staff_shifts.is_approved AS isApproved,
+        staff_shifts.is_completed AS isCompleted,
         DATE_FORMAT(staff_shifts.check_in_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkInAt,
         DATE_FORMAT(staff_shifts.check_out_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkOutAt,
         IF(staff_shifts.check_in_at IS NOT NULL AND staff_shifts.check_out_at IS NOT NULL,
           TIMESTAMPDIFF(MINUTE, staff_shifts.check_in_at, staff_shifts.check_out_at), NULL)
-          AS workedMinutes,` : ""}
+          AS workedMinutes,
+        ${month ? `users.role AS staffRole,
+        staff_shifts.overtime_minutes AS overtimeMinutes,
+        staff_shifts.completed_at AS completedAt,` : ""}
         staff_shifts.created_at AS createdAt
       FROM staff_shifts
       JOIN users ON users.id = staff_shifts.user_id
@@ -1151,7 +1212,8 @@ app.post(
           DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
           TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
           TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
-          staff_shifts.note, staff_shifts.is_completed AS isCompleted,
+          staff_shifts.note, staff_shifts.is_approved AS isApproved,
+          staff_shifts.is_completed AS isCompleted,
           staff_shifts.overtime_minutes AS overtimeMinutes,
           staff_shifts.completed_at AS completedAt,
           staff_shifts.created_at AS createdAt
@@ -1184,6 +1246,54 @@ app.post(
   }),
 );
 
+app.patch(
+  "/api/staff-shifts/:shiftId/approval",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      response.status(400).json({ error: "Ca làm không hợp lệ." });
+      return;
+    }
+
+    const shift = await one(`
+      SELECT id, is_approved AS isApproved,
+        check_in_at AS checkInAt, check_out_at AS checkOutAt
+      FROM staff_shifts
+      WHERE id = ?
+    `, [shiftId]);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+    if (shift.isApproved) {
+      response.json({ id: shiftId, isApproved: true });
+      return;
+    }
+    if (shift.checkInAt || shift.checkOutAt) {
+      response.status(409).json({
+        error: "Không thể xác nhận lịch sau khi ca đã có dữ liệu chấm công.",
+      });
+      return;
+    }
+
+    const result = await execute(`
+      UPDATE staff_shifts
+      SET is_approved = TRUE
+      WHERE id = ? AND is_approved = FALSE
+        AND check_in_at IS NULL AND check_out_at IS NULL
+    `, [shiftId]);
+    if (result.affectedRows !== 1) {
+      response.status(409).json({ error: "Lịch ca vừa được cập nhật. Hãy tải lại trang." });
+      return;
+    }
+
+    io.emit("staff-shift:approval-updated", { id: shiftId, isApproved: true });
+    response.json({ id: shiftId, isApproved: true });
+  }),
+);
+
 app.post(
   "/api/staff-shifts/:shiftId/check-in",
   requireAuth,
@@ -1201,6 +1311,10 @@ app.post(
     }
     if (String(shift.userId) !== String(request.user.id)) {
       response.status(403).json({ error: "Bạn chỉ có thể chấm công cho ca của mình." });
+      return;
+    }
+    if (!shift.isApproved) {
+      response.status(409).json({ error: "Lịch ca cần được quản lý xác nhận trước." });
       return;
     }
     if (shift.shiftDate !== getVietnamDate()) {
@@ -1229,7 +1343,9 @@ app.post(
       response.status(409).json({ error: "Ca này vừa được check-in ở nơi khác." });
       return;
     }
-    response.json(await getStaffAttendance(shiftId));
+    const updatedShift = await getStaffAttendance(shiftId);
+    io.emit("staff-shift:attendance-updated", updatedShift);
+    response.json(updatedShift);
   }),
 );
 
@@ -1250,6 +1366,10 @@ app.post(
     }
     if (String(shift.userId) !== String(request.user.id)) {
       response.status(403).json({ error: "Bạn chỉ có thể chấm công cho ca của mình." });
+      return;
+    }
+    if (!shift.isApproved) {
+      response.status(409).json({ error: "Lịch ca cần được quản lý xác nhận trước." });
       return;
     }
     if (!shift.checkInAt) {
@@ -1275,7 +1395,9 @@ app.post(
       response.status(409).json({ error: "Không thể check-out ca này." });
       return;
     }
-    response.json(await getStaffAttendance(shiftId));
+    const updatedShift = await getStaffAttendance(shiftId);
+    io.emit("staff-shift:attendance-updated", updatedShift);
+    response.json(updatedShift);
   }),
 );
 
@@ -1351,7 +1473,9 @@ app.patch(
       checkOut ? toUtcSqlDateTime(checkOut) : null,
       shiftId,
     ]);
-    response.json(await getStaffAttendance(shiftId));
+    const updatedShift = await getStaffAttendance(shiftId);
+    io.emit("staff-shift:attendance-updated", updatedShift);
+    response.json(updatedShift);
   }),
 );
 
@@ -1371,9 +1495,7 @@ app.patch(
       return;
     }
     const shift = await one(`
-      SELECT DATE_FORMAT(shift_date, '%Y-%m-%d') AS shiftDate,
-        TIME_FORMAT(end_time, '%H:%i') AS endTime,
-        check_in_at AS checkInAt, check_out_at AS checkOutAt
+      SELECT check_in_at AS checkInAt, check_out_at AS checkOutAt
       FROM staff_shifts
       WHERE id = ?
     `, [shiftId]);
@@ -1385,12 +1507,6 @@ app.patch(
       if (!shift.checkInAt || !shift.checkOutAt) {
         response.status(409).json({
           error: "Cần có check-in và check-out trước khi xác nhận ca.",
-        });
-        return;
-      }
-      if (`${shift.shiftDate}T${shift.endTime}` > getVietnamDateTime()) {
-        response.status(400).json({
-          error: "Chỉ có thể xác nhận ca sau khi giờ làm kết thúc.",
         });
         return;
       }
@@ -1411,7 +1527,9 @@ app.patch(
         return;
       }
     }
-    response.json({ id: shiftId, isCompleted: completed });
+    const updatedShift = await getStaffAttendance(shiftId);
+    io.emit("staff-shift:attendance-updated", updatedShift);
+    response.json(updatedShift);
   }),
 );
 
@@ -1669,6 +1787,151 @@ app.delete(
 );
 
 app.get(
+  "/api/admin/website/health",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (_request, response) => {
+    const databaseCheckStartedAt = Date.now();
+    let databaseStatus = "ok";
+    try {
+      await one("SELECT 1 AS result");
+    } catch (error) {
+      databaseStatus = "unavailable";
+      console.error("Website health database check failed:", error);
+    }
+
+    response.setHeader("Cache-Control", "no-store");
+    response.json({
+      status: databaseStatus === "ok" ? "healthy" : "degraded",
+      checkedAt: new Date().toISOString(),
+      api: {
+        status: "ok",
+        uptimeSeconds: Math.floor(process.uptime()),
+      },
+      database: {
+        status: databaseStatus,
+        responseTimeMs: Date.now() - databaseCheckStartedAt,
+      },
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/website/seo",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const siteUrl = getPublicSiteUrl(request);
+    const siteUrlConfigured = Boolean(process.env.SITE_URL?.trim());
+    let validSiteUrl = false;
+    let usesHttps = false;
+    try {
+      const parsedSiteUrl = new URL(siteUrl);
+      validSiteUrl = ["http:", "https:"].includes(parsedSiteUrl.protocol);
+      usesHttps = parsedSiteUrl.protocol === "https:";
+    } catch {
+      validSiteUrl = false;
+    }
+
+    const sitemapPaths = await getSitemapPaths();
+    response.setHeader("Cache-Control", "no-store");
+    response.json({
+      siteUrl,
+      indexableUrlCount: sitemapPaths.length,
+      checks: [
+        {
+          id: "site-url",
+          label: "Domain website chính thức",
+          status: siteUrlConfigured && validSiteUrl && usesHttps ? "ok" : "warning",
+          detail: !siteUrlConfigured
+            ? "SITE_URL chưa được cấu hình; sitemap đang lấy domain từ request hiện tại."
+            : !validSiteUrl
+              ? "SITE_URL không phải URL HTTP/HTTPS hợp lệ."
+              : usesHttps
+                ? "Domain chính thức đã cấu hình HTTPS."
+                : "SITE_URL đang dùng HTTP; website triển khai nên dùng HTTPS.",
+        },
+        {
+          id: "sitemap",
+          label: "Sitemap XML",
+          status: "ok",
+          detail: `Sitemap được tạo tự động, hiện có ${sitemapPaths.length} URL công khai.`,
+          href: "/sitemap.xml",
+        },
+        {
+          id: "robots",
+          label: "Robots.txt",
+          status: "ok",
+          detail: "robots.txt cho phép crawler truy cập và khai báo đường dẫn sitemap.",
+          href: "/robots.txt",
+        },
+        {
+          id: "metadata",
+          label: "Title và meta description",
+          status: "warning",
+          detail: "Trang chủ và trang món có metadata; các trang nội dung khác nên được bổ sung metadata riêng.",
+        },
+      ],
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/analytics/page-views",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const days = request.query.days === undefined ? 30 : Number(request.query.days);
+    if (![7, 30, 90].includes(days)) {
+      response.status(400).json({ error: "Khoảng thời gian cần là 7, 30 hoặc 90 ngày." });
+      return;
+    }
+
+    const endDate = getVietnamDate();
+    const startDate = shiftVietnamDate(endDate, -(days - 1));
+    const [dailyRows, pageRows] = await Promise.all([
+      many(`
+        SELECT DATE_FORMAT(view_date, '%Y-%m-%d') AS viewDate, SUM(views) AS views
+        FROM site_page_views
+        WHERE view_date BETWEEN ? AND ?
+        GROUP BY view_date
+        ORDER BY view_date
+      `, [startDate, endDate]),
+      many(`
+        SELECT path, SUM(views) AS views
+        FROM site_page_views
+        WHERE view_date BETWEEN ? AND ?
+        GROUP BY path
+        ORDER BY views DESC, path
+        LIMIT 10
+      `, [startDate, endDate]),
+    ]);
+
+    const viewsByDate = new Map(
+      dailyRows.map(({ viewDate, views }) => [viewDate, Number(views)]),
+    );
+    const dailyViews = Array.from({ length: days }, (_, index) => {
+      const viewDate = shiftVietnamDate(startDate, index);
+      return { date: viewDate, views: viewsByDate.get(viewDate) ?? 0 };
+    });
+
+    response.setHeader("Cache-Control", "no-store");
+    response.json({
+      days,
+      startDate,
+      endDate,
+      totalViews: dailyViews.reduce((total, item) => total + item.views, 0),
+      todayViews: viewsByDate.get(endDate) ?? 0,
+      dailyViews,
+      popularPages: pageRows.map(({ path, views }) => ({
+        path,
+        views: Number(views),
+      })),
+    });
+  }),
+);
+
+app.get(
   "/api/admin/users",
   requireAuth,
   requireAdmin,
@@ -1772,16 +2035,26 @@ function getPublicSiteUrl(request) {
   return `${forwardedProtocol || request.protocol}://${host}`;
 }
 
-app.get("/sitemap.xml", asyncRoute(async (request, response) => {
-  const items = await many("SELECT id, name FROM menu_items ORDER BY sort_order, id");
-  const siteUrl = getPublicSiteUrl(request);
-  const paths = [
+async function getSitemapPaths() {
+  const [items, blogPosts] = await Promise.all([
+    many("SELECT id, name FROM menu_items ORDER BY sort_order, id"),
+    many("SELECT id FROM blog_posts ORDER BY created_at DESC, id DESC"),
+  ]);
+  return [
     "/",
     "/story",
+    "/space",
     "/menu",
+    "/blog",
     "/visit",
     ...items.map((item) => getMenuItemPath(item)),
+    ...blogPosts.map((post) => `/blog/${post.id}`),
   ];
+}
+
+app.get("/sitemap.xml", asyncRoute(async (request, response) => {
+  const siteUrl = getPublicSiteUrl(request);
+  const paths = await getSitemapPaths();
   const escapeXml = (value) =>
     value.replace(/[<>&'"]/g, (character) => ({
       "<": "&lt;",

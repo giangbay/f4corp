@@ -1,244 +1,316 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchApi } from "./api.js";
-import { useAuth } from "./AuthContext.jsx";
+import { Link } from "react-router-dom";
+import { io } from "socket.io-client";
+import { fetchApi, useApiResource } from "./api.js";
 
-const REGULAR_HOURLY_RATE = 20_000;
-const OVERTIME_HOURLY_RATE = 30_000;
-const REGULAR_SHIFT_MINUTES = 5 * 60;
-const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const VIETNAM_OFFSET = "+07:00";
+const STANDARD_SHIFT_MINUTES = 5 * 60;
 
-function getVietnamParts(date, options) {
-  return Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: VIETNAM_TIME_ZONE,
-      ...options,
-    })
-      .formatToParts(date)
-      .map(({ type, value }) => [type, value]),
-  );
-}
-
-function currentMonth() {
-  const parts = getVietnamParts(new Date(), {
-    year: "numeric",
-    month: "2-digit",
-  });
-  return `${parts.year}-${parts.month}`;
-}
-
-function currentDate() {
-  const parts = getVietnamParts(new Date(), {
+function getVietnamDateTime(date = new Date()) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Ho_Chi_Minh",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  });
-  return `${parts.year}-${parts.month}-${parts.day}`;
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(date).replace(" ", "T");
 }
 
-function formatCurrency(amount) {
-  return `${Math.round(amount).toLocaleString("vi-VN")}đ`;
+function getVietnamDate(date = new Date()) {
+  return getVietnamDateTime(date).slice(0, 10);
 }
 
-function formatHours(minutes) {
-  return `${(minutes / 60).toLocaleString("vi-VN", {
-    maximumFractionDigits: 2,
-  })} giờ`;
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function formatShiftDate(date) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString("vi-VN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return new Intl.DateTimeFormat("vi-VN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(`${date}T12:00:00${VIETNAM_OFFSET}`));
 }
 
 function formatAttendanceTime(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("vi-VN", {
-    timeZone: VIETNAM_TIME_ZONE,
-    day: "2-digit",
-    month: "2-digit",
+  if (!value) return "Chưa có";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có";
+  return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
-    hourCycle: "h23",
-  });
+    timeZone: "Asia/Ho_Chi_Minh",
+  }).format(date);
 }
 
-function toLocalDateTimeInput(value) {
-  if (!value) return "";
-  const parts = getVietnamParts(new Date(value), {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+function getShiftMinutes(shift) {
+  return Number.isFinite(Number(shift.workedMinutes))
+    ? Number(shift.workedMinutes)
+    : 0;
 }
 
-function localDateTimeToIso(value) {
-  return new Date(`${value}:00+07:00`).toISOString();
+function getShiftPay(minutes) {
+  const standardMinutes = Math.min(minutes, STANDARD_SHIFT_MINUTES);
+  const overtimeMinutes = Math.max(0, minutes - STANDARD_SHIFT_MINUTES);
+  return Math.round((standardMinutes / 60) * 20000 + (overtimeMinutes / 60) * 30000);
 }
 
-function currentVietnamDateTime() {
-  const parts = getVietnamParts(new Date(), {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+function formatDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${hours} giờ ${remainder} phút`;
 }
 
-function hasShiftEnded(shift) {
-  return `${shift.shiftDate}T${shift.endTime}` <= currentVietnamDateTime();
+function getCountdown(startTimestamp, nowTimestamp) {
+  const remaining = Math.max(0, startTimestamp - nowTimestamp);
+  const seconds = Math.floor(remaining / 1000);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const restSeconds = seconds % 60;
+  const formattedTime = [hours, minutes, restSeconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+  return days > 0 ? `${days} ngày ${formattedTime}` : formattedTime;
 }
 
-function getWorkedMinutes(shift) {
-  if (shift.workedMinutes === null || shift.workedMinutes === undefined) return null;
-  return Math.max(0, Number(shift.workedMinutes) || 0);
+function getShiftState(shift, now) {
+  const today = getVietnamDate(now);
+  const todayTimestamp = now.getTime();
+  const startTimestamp = new Date(
+    `${shift.shiftDate}T${shift.startTime}:00${VIETNAM_OFFSET}`,
+  ).getTime();
+  const endTimestamp = new Date(
+    `${shift.shiftDate}T${shift.endTime}:00${VIETNAM_OFFSET}`,
+  ).getTime();
+  const isToday = shift.shiftDate === today;
+
+  if (!shift.isApproved) {
+    return { label: "Chờ xác nhận lịch", detail: "Chỉ có thể chấm công sau khi quản lý xác nhận." };
+  }
+  if (shift.isCompleted) {
+    return { label: "Đã xác nhận ngày làm", detail: "Ngày công đã được quản lý xác nhận." };
+  }
+  if (shift.checkOutAt) {
+    return { label: "Chờ xác nhận ngày công", detail: "Đã checkout. Quản lý sẽ xác nhận ngày làm." };
+  }
+  if (shift.checkInAt) {
+    if (isToday) {
+      return {
+        label: "Đang làm",
+        detail: "Hãy checkout khi kết thúc ca.",
+        canCheckOut: true,
+      };
+    }
+    return {
+      label: "Đã check-in",
+      detail: "Ca đã qua ngày kết thúc. Vui lòng liên hệ quản lý để xử lý.",
+    };
+  }
+  if (shift.shiftDate < today) {
+    return { label: "Ca đã qua", detail: "Ca này chưa có dữ liệu chấm công." };
+  }
+  if (!isToday || todayTimestamp < startTimestamp) {
+    return {
+      label: "Chưa đến giờ",
+      detail: `Check-in mở sau ${shift.startTime} · còn ${getCountdown(startTimestamp, todayTimestamp)}.`,
+    };
+  }
+  if (todayTimestamp >= endTimestamp) {
+    return { label: "Ca đã kết thúc", detail: "Không thể check-in sau khi ca kết thúc." };
+  }
+  return {
+    label: "Đến giờ check-in",
+    detail: "Bạn có thể bắt đầu ca làm.",
+    canCheckIn: true,
+  };
 }
 
-function getShiftPay(shift) {
-  const workedMinutes = getWorkedMinutes(shift) ?? 0;
-  const regularMinutes = Math.min(workedMinutes, REGULAR_SHIFT_MINUTES);
-  const overtimeMinutes = Math.max(workedMinutes - REGULAR_SHIFT_MINUTES, 0);
+function AttendanceCard({
+  shift,
+  isAdmin,
+  now,
+  saving,
+  onAttendance,
+  onApprove,
+}) {
+  const state = getShiftState(shift, now);
+  const workedMinutes = getShiftMinutes(shift);
+  const hasPayroll = Boolean(shift.checkOutAt);
+  const earned = getShiftPay(workedMinutes);
+  const canShowCheckIn =
+    !isAdmin &&
+    !shift.checkInAt &&
+    !shift.checkOutAt &&
+    shift.shiftDate >= getVietnamDate(now) &&
+    shift.isApproved &&
+    state.label !== "Ca đã kết thúc";
+
   return (
-    (regularMinutes / 60) * REGULAR_HOURLY_RATE +
-    (overtimeMinutes / 60) * OVERTIME_HOURLY_RATE
+    <article className="attendance-card">
+      <header className="attendance-card-header">
+        <div>
+          <p className="attendance-card-date">{formatShiftDate(shift.shiftDate)}</p>
+          <h3>{shift.startTime}–{shift.endTime}</h3>
+          {isAdmin && <p className="attendance-card-staff">{shift.staffName}</p>}
+        </div>
+        <span className={`attendance-status${shift.isCompleted ? " is-complete" : ""}`}>
+          {state.label}
+        </span>
+      </header>
+
+      <p className="attendance-card-detail">{state.detail}</p>
+
+      <div className="attendance-card-times">
+        <span>Check-in <strong>{formatAttendanceTime(shift.checkInAt)}</strong></span>
+        <span>Check-out <strong>{formatAttendanceTime(shift.checkOutAt)}</strong></span>
+        {hasPayroll && (
+          <span>
+            Thời gian làm <strong>{formatDuration(workedMinutes)}</strong>
+          </span>
+        )}
+      </div>
+
+      {hasPayroll && (
+        <p className="attendance-card-pay">
+          {shift.isCompleted ? "Lương đã xác nhận" : "Lương dự kiến"}:{" "}
+          <strong>{formatCurrency(earned)}</strong>
+        </p>
+      )}
+
+      <footer className="attendance-card-actions">
+        {isAdmin && shift.checkOutAt && !shift.isCompleted && (
+          <button
+            className="button"
+            type="button"
+            disabled={saving}
+            onClick={() => onApprove(shift)}
+          >
+            {saving ? "Đang xác nhận…" : "Xác nhận ngày làm"}
+          </button>
+        )}
+        {canShowCheckIn && (
+          <button
+            className="button"
+            type="button"
+            disabled={!state.canCheckIn || saving}
+            onClick={() => onAttendance(shift, "check-in")}
+          >
+            Check-in
+          </button>
+        )}
+        {!isAdmin && state.canCheckOut && (
+          <button
+            className="button"
+            type="button"
+            disabled={saving}
+            onClick={() => onAttendance(shift, "check-out")}
+          >
+            Check-out
+          </button>
+        )}
+      </footer>
+    </article>
   );
 }
 
-export default function StaffPayrollSection() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-  const [month, setMonth] = useState(currentMonth);
-  const [shifts, setShifts] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [attendanceDrafts, setAttendanceDrafts] = useState({});
+export default function StaffPayrollSection({ isAdmin = false }) {
+  const [month, setMonth] = useState(getVietnamDate().slice(0, 7));
+  const [now, setNow] = useState(() => new Date());
   const [savingShiftId, setSavingShiftId] = useState("");
+  const [actionError, setActionError] = useState("");
+  const {
+    data: shifts,
+    setData: setShifts,
+    loading: shiftsLoading,
+    error: shiftsError,
+  } = useApiResource(`/staff-shifts?month=${month}`);
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    const requests = [
-      fetchApi(`/staff-shifts?month=${encodeURIComponent(month)}`),
-    ];
-    if (isAdmin) requests.push(fetchApi("/admin/users"));
-
-    Promise.all(requests)
-      .then(([monthShifts, users = []]) => {
-        if (!active) return;
-        setShifts(monthShifts);
-        setAccounts(
-          users.filter((account) =>
-            ["staff", "admin"].includes(account.role),
-          ),
-        );
-        setAttendanceDrafts(
-          Object.fromEntries(
-            monthShifts.map((shift) => [
-              shift.id,
-              {
-                checkInAt: toLocalDateTimeInput(shift.checkInAt),
-                checkOutAt: toLocalDateTimeInput(shift.checkOutAt),
-              },
-            ]),
-          ),
-        );
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    const socket = io();
+    socket.on("staff-shift:attendance-updated", (updatedShift) => {
+      setShifts((existing) =>
+        existing.map((shift) =>
+          String(shift.id) === String(updatedShift.id)
+            ? { ...shift, ...updatedShift }
+            : shift,
+        ),
+      );
+    });
+    socket.on("staff-shift:approval-updated", ({ id, isApproved }) => {
+      setShifts((existing) =>
+        existing.map((shift) =>
+          String(shift.id) === String(id) ? { ...shift, isApproved } : shift,
+        ),
+      );
+    });
     return () => {
-      active = false;
+      window.clearInterval(timer);
+      socket.disconnect();
     };
-  }, [isAdmin, month]);
+  }, [setShifts]);
 
-  const completedShifts = shifts.filter(
-    (shift) => Boolean(shift.isCompleted) && getWorkedMinutes(shift) !== null,
+  const visibleShifts = [...shifts].sort((first, second) =>
+    second.shiftDate.localeCompare(first.shiftDate) ||
+    second.startTime.localeCompare(first.startTime),
   );
-  const checkedOutShifts = shifts.filter(
-    (shift) => getWorkedMinutes(shift) !== null,
-  );
-  const recordedMinutes = checkedOutShifts.reduce(
-    (total, shift) => total + getWorkedMinutes(shift),
-    0,
-  );
-  const approvedMinutes = completedShifts.reduce(
-    (total, shift) => total + getWorkedMinutes(shift),
-    0,
-  );
-  const totalSalary = completedShifts.reduce(
-    (total, shift) => total + getShiftPay(shift),
-    0,
-  );
-  const payrollRows = useMemo(() => {
-    const byUser = new Map(
-      accounts.map((account) => [
-        String(account.id),
-        {
-          ...account,
-          checkedOut: 0,
-          workedMinutes: 0,
-          approvedMinutes: 0,
-          salary: 0,
-        },
-      ]),
-    );
-    for (const shift of shifts) {
-      const row = byUser.get(String(shift.userId));
-      if (!row) continue;
-      const minutes = getWorkedMinutes(shift);
-      if (minutes === null) continue;
-      row.checkedOut += 1;
-      row.workedMinutes += minutes;
+  const payrollSummary = useMemo(() => {
+    if (!isAdmin) return [];
+    const byStaff = new Map();
+    shifts.forEach((shift) => {
+      const current = byStaff.get(shift.userId) || {
+        id: shift.userId,
+        name: shift.staffName,
+        completedShifts: 0,
+        totalMinutes: 0,
+        totalPay: 0,
+      };
       if (shift.isCompleted) {
-        row.approvedMinutes += minutes;
-        row.salary += getShiftPay(shift);
+        const minutes = getShiftMinutes(shift);
+        current.completedShifts += 1;
+        current.totalMinutes += minutes;
+        current.totalPay += getShiftPay(minutes);
       }
-    }
-    return [...byUser.values()].sort((first, second) =>
+      byStaff.set(shift.userId, current);
+    });
+    return [...byStaff.values()].sort((first, second) =>
       first.name.localeCompare(second.name, "vi"),
     );
-  }, [accounts, shifts]);
+  }, [isAdmin, shifts]);
 
-  function updateShift(shiftId, patch) {
-    setShifts((existing) =>
-      existing.map((shift) =>
-        String(shift.id) === String(shiftId) ? { ...shift, ...patch } : shift,
-      ),
-    );
-  }
+  const completedShifts = shifts.filter((shift) => shift.isCompleted);
+  const totalMinutes = completedShifts.reduce(
+    (total, shift) => total + getShiftMinutes(shift),
+    0,
+  );
+  const totalPay = completedShifts.reduce(
+    (total, shift) =>
+      total + getShiftPay(getShiftMinutes(shift)),
+    0,
+  );
 
-  async function recordAttendance(shift, action) {
+  async function handleAttendance(shift, action) {
     setActionError("");
     setSavingShiftId(String(shift.id));
     try {
-      const result = await fetchApi(
-        `/staff-shifts/${shift.id}/${action}`,
-        { method: "POST" },
+      const updatedShift = await fetchApi(`/staff-shifts/${shift.id}/${action}`, {
+        method: "POST",
+      });
+      setShifts((existing) =>
+        existing.map((item) =>
+          String(item.id) === String(updatedShift.id)
+            ? { ...item, ...updatedShift }
+            : item,
+        ),
       );
-      updateShift(shift.id, result);
-      setAttendanceDrafts((existing) => ({
-        ...existing,
-        [shift.id]: {
-          checkInAt: toLocalDateTimeInput(result.checkInAt),
-          checkOutAt: toLocalDateTimeInput(result.checkOutAt),
-        },
-      }));
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -246,46 +318,21 @@ export default function StaffPayrollSection() {
     }
   }
 
-  async function correctAttendance(shift) {
-    const draft = attendanceDrafts[shift.id] ?? {};
-    if (Boolean(draft.checkInAt) !== Boolean(draft.checkOutAt)) {
-      setActionError("Cần nhập cả giờ check-in và check-out, hoặc xóa cả hai.");
-      return;
-    }
+  async function handleApproval(shift) {
     setActionError("");
     setSavingShiftId(String(shift.id));
     try {
-      const result = await fetchApi(`/staff-shifts/${shift.id}/attendance`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          checkInAt: draft.checkInAt ? localDateTimeToIso(draft.checkInAt) : null,
-          checkOutAt: draft.checkOutAt ? localDateTimeToIso(draft.checkOutAt) : null,
-        }),
-      });
-      updateShift(shift.id, result);
-      setAttendanceDrafts((existing) => ({
-        ...existing,
-        [shift.id]: {
-          checkInAt: toLocalDateTimeInput(result.checkInAt),
-          checkOutAt: toLocalDateTimeInput(result.checkOutAt),
-        },
-      }));
-    } catch (requestError) {
-      setActionError(requestError.message);
-    } finally {
-      setSavingShiftId("");
-    }
-  }
-
-  async function updateCompletion(shift, completed) {
-    setActionError("");
-    setSavingShiftId(String(shift.id));
-    try {
-      const result = await fetchApi(`/staff-shifts/${shift.id}/completion`, {
-        method: "PATCH",
-        body: JSON.stringify({ completed }),
-      });
-      updateShift(shift.id, result);
+      const updatedShift = await fetchApi(
+        `/staff-shifts/${shift.id}/completion`,
+        { method: "PATCH", body: JSON.stringify({ completed: true }) },
+      );
+      setShifts((existing) =>
+        existing.map((item) =>
+          String(item.id) === String(updatedShift.id)
+            ? { ...item, ...updatedShift }
+            : item,
+        ),
+      );
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -294,314 +341,103 @@ export default function StaffPayrollSection() {
   }
 
   return (
-    <section className="staff-payroll" aria-labelledby="staff-payroll-heading">
+    <section className="staff-payroll-page">
       <header className="staff-payroll-heading">
         <div>
-          <span className="eyebrow">{isAdmin ? "Theo dõi nhân sự" : "Công của bạn"}</span>
-          <h2 id="staff-payroll-heading">
-            {isAdmin ? "Bảng công và tính lương" : "Lịch đã làm trong tháng"}
-          </h2>
+          <p className="eyebrow">{isAdmin ? "QUẢN LÝ NHÂN SỰ" : "CA LÀM CỦA TÔI"}</p>
+          <h1>{isAdmin ? "Theo dõi chấm công" : "Chấm công theo ca"}</h1>
           <p>
-            Check-in/out tính giờ thực tế, không trừ giờ nghỉ · 20.000đ/giờ thường ·
-            30.000đ/giờ ngoài giờ sau 5 tiếng/ca
+            {isAdmin
+              ? "Xác nhận ngày công sau khi nhân viên checkout."
+              : "Đăng ký ca, chờ quản lý xác nhận lịch rồi check-in và checkout."}
           </p>
         </div>
-        <label className="staff-payroll-month">
-          <span>Tháng</span>
+        <Link className="button button-outline" to="/shifts">
+          {isAdmin ? "Duyệt lịch ca" : "Xem lịch và đăng ký ca"}
+        </Link>
+      </header>
+
+      <div className="staff-payroll-toolbar">
+        <label>
+          Tháng
           <input
             type="month"
             value={month}
             onChange={(event) => setMonth(event.target.value)}
           />
         </label>
-      </header>
+      </div>
 
-      {loading && <p className="resource-message">Đang tải bảng công…</p>}
-      {error && <p className="form-message form-message-error" role="alert">{error}</p>}
-      {actionError && (
-        <p className="form-message form-message-error" role="alert">{actionError}</p>
+      {isAdmin && (
+        <div className="payroll-summary-grid">
+          <article>
+            <span>Ngày công đã xác nhận</span>
+            <strong>{completedShifts.length}</strong>
+          </article>
+          <article>
+            <span>Tổng thời gian đã xác nhận</span>
+            <strong>{formatDuration(totalMinutes)}</strong>
+          </article>
+          <article>
+            <span>Tổng lương đã xác nhận</span>
+            <strong>{formatCurrency(totalPay)}</strong>
+          </article>
+        </div>
       )}
-      {!loading && !error && (
-        <>
-          <div className="staff-payroll-totals">
-            <article>
-              <span>Ca đã check-out</span>
-              <strong>{checkedOutShifts.length}</strong>
-            </article>
-            <article>
-              <span>Tổng giờ ghi nhận</span>
-              <strong>{formatHours(recordedMinutes)}</strong>
-            </article>
-            <article>
-              <span>Giờ đã duyệt</span>
-              <strong>{formatHours(approvedMinutes)}</strong>
-            </article>
-            <article>
-              <span>Lương đã duyệt</span>
-              <strong>{formatCurrency(totalSalary)}</strong>
-            </article>
+
+      {isAdmin && payrollSummary.length > 0 && (
+        <section className="payroll-staff-summary">
+          <h2>Tổng hợp theo nhân viên</h2>
+          <div className="payroll-staff-grid">
+            {payrollSummary.map((staff) => (
+              <article key={staff.id}>
+                <strong>{staff.name}</strong>
+                <span>{staff.completedShifts} ngày công</span>
+                <span>{formatDuration(staff.totalMinutes)}</span>
+                <b>{formatCurrency(staff.totalPay)}</b>
+              </article>
+            ))}
           </div>
-
-          {isAdmin && (
-            <div className="staff-payroll-table-wrap">
-              <table className="staff-payroll-table">
-                <caption>Tổng hợp chấm công và lương theo nhân sự trong tháng</caption>
-                <thead>
-                  <tr>
-                    <th>Nhân sự</th>
-                    <th>Ca đã check-out</th>
-                    <th>Tổng giờ</th>
-                    <th>Giờ đã duyệt</th>
-                    <th>Lương đã duyệt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payrollRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        {row.name}
-                        {row.role === "admin" && (
-                          <span className="staff-payroll-role">Quản trị viên</span>
-                        )}
-                      </td>
-                      <td>{row.checkedOut}</td>
-                      <td>{formatHours(row.workedMinutes)}</td>
-                      <td>{formatHours(row.approvedMinutes)}</td>
-                      <td>{formatCurrency(row.salary)}</td>
-                    </tr>
-                  ))}
-                  {payrollRows.length === 0 && (
-                    <tr><td colSpan="5">Chưa có tài khoản nhân viên.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="staff-payroll-table-wrap">
-            <table className="staff-payroll-table">
-              <caption>
-                {isAdmin ? "Chi tiết chấm công theo ca" : "Các ca của bạn trong tháng"}
-              </caption>
-              <thead>
-                <tr>
-                  {isAdmin && <th>Nhân sự</th>}
-                  <th>Ngày</th>
-                  <th>Ca</th>
-                  <th>Check-in</th>
-                  <th>Check-out</th>
-                  <th>Giờ thực tế</th>
-                  <th>Trạng thái</th>
-                  <th>Lương ca</th>
-                  <th>{isAdmin ? "Thao tác" : "Chấm công"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shifts.map((shift) => {
-                  const ownShift = String(shift.userId) === String(user?.id);
-                  const isToday = shift.shiftDate === currentDate();
-                  const canCheckIn =
-                    ownShift &&
-                    isToday &&
-                    !shift.checkInAt &&
-                    `${shift.shiftDate}T${shift.startTime}` <=
-                      currentVietnamDateTime() &&
-                    !hasShiftEnded(shift);
-                  const canCheckOut =
-                    ownShift &&
-                    isToday &&
-                    Boolean(shift.checkInAt) &&
-                    !shift.checkOutAt;
-                  const saving = savingShiftId === String(shift.id);
-                  const workedMinutes = getWorkedMinutes(shift);
-                  const draft = attendanceDrafts[shift.id] ?? {
-                    checkInAt: "",
-                    checkOutAt: "",
-                  };
-
-                  return (
-                    <tr key={shift.id}>
-                      {isAdmin && (
-                        <td>
-                          {shift.staffName}
-                          {shift.staffRole === "admin" && (
-                            <span className="staff-payroll-role">Quản trị viên</span>
-                          )}
-                        </td>
-                      )}
-                      <td>{formatShiftDate(shift.shiftDate)}</td>
-                      <td>{shift.startTime}–{shift.endTime}</td>
-                      <td>
-                        {isAdmin ? (
-                          <input
-                            className="staff-attendance-time"
-                            type="datetime-local"
-                            aria-label={`Sửa check-in ${shift.staffName}, ${shift.shiftDate}`}
-                            value={draft.checkInAt}
-                            onChange={(event) =>
-                              setAttendanceDrafts((existing) => ({
-                                ...existing,
-                                [shift.id]: {
-                                  ...draft,
-                                  checkInAt: event.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        ) : (
-                          formatAttendanceTime(shift.checkInAt)
-                        )}
-                      </td>
-                      <td>
-                        {isAdmin ? (
-                          <input
-                            className="staff-attendance-time"
-                            type="datetime-local"
-                            aria-label={`Sửa check-out ${shift.staffName}, ${shift.shiftDate}`}
-                            value={draft.checkOutAt}
-                            onChange={(event) =>
-                              setAttendanceDrafts((existing) => ({
-                                ...existing,
-                                [shift.id]: {
-                                  ...draft,
-                                  checkOutAt: event.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        ) : (
-                          formatAttendanceTime(shift.checkOutAt)
-                        )}
-                      </td>
-                      <td>{workedMinutes === null ? "—" : formatHours(workedMinutes)}</td>
-                      <td>
-                        <span
-                          className={`staff-payroll-status${shift.isCompleted ? " is-completed" : ""}`}
-                        >
-                          {shift.isCompleted
-                            ? "Đã duyệt"
-                            : shift.checkOutAt
-                              ? "Chờ duyệt"
-                              : shift.checkInAt
-                                ? "Đang làm"
-                                : "Chưa check-in"}
-                        </span>
-                      </td>
-                      <td>
-                        {shift.isCompleted && workedMinutes !== null
-                          ? formatCurrency(getShiftPay(shift))
-                          : "—"}
-                      </td>
-                      {isAdmin && (
-                        <td>
-                          <div className="staff-attendance-actions">
-                            {canCheckIn && (
-                              <button
-                                className="staff-payroll-action"
-                                type="button"
-                                disabled={saving}
-                                onClick={() => recordAttendance(shift, "check-in")}
-                              >
-                                {saving ? "Đang lưu…" : "Check-in"}
-                              </button>
-                            )}
-                            {canCheckOut && (
-                              <button
-                                className="staff-payroll-action"
-                                type="button"
-                                disabled={saving}
-                                onClick={() => recordAttendance(shift, "check-out")}
-                              >
-                                {saving ? "Đang lưu…" : "Check-out"}
-                              </button>
-                            )}
-                            <button
-                              className="staff-payroll-action is-secondary"
-                              type="button"
-                              disabled={saving}
-                              onClick={() => correctAttendance(shift)}
-                            >
-                              Lưu giờ
-                            </button>
-                            {shift.isCompleted ? (
-                              <button
-                                className="staff-payroll-action is-secondary"
-                                type="button"
-                                disabled={saving}
-                                onClick={() => updateCompletion(shift, false)}
-                              >
-                                Bỏ duyệt
-                              </button>
-                            ) : (
-                              <button
-                                className="staff-payroll-action"
-                                type="button"
-                                disabled={
-                                  !shift.checkInAt ||
-                                  !shift.checkOutAt ||
-                                  !hasShiftEnded(shift) ||
-                                  saving
-                                }
-                                title={
-                                  !hasShiftEnded(shift)
-                                    ? "Chỉ duyệt sau khi ca kết thúc"
-                                    : ""
-                                }
-                                onClick={() => updateCompletion(shift, true)}
-                              >
-                                Duyệt công
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {!isAdmin && (
-                        <td>
-                          <div className="staff-attendance-actions">
-                            {canCheckIn && (
-                              <button
-                                className="staff-payroll-action"
-                                type="button"
-                                disabled={saving}
-                                onClick={() => recordAttendance(shift, "check-in")}
-                              >
-                                {saving ? "Đang lưu…" : "Check-in"}
-                              </button>
-                            )}
-                            {canCheckOut && (
-                              <button
-                                className="staff-payroll-action"
-                                type="button"
-                                disabled={saving}
-                                onClick={() => recordAttendance(shift, "check-out")}
-                              >
-                                {saving ? "Đang lưu…" : "Check-out"}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-                {shifts.length === 0 && (
-                  <tr>
-                    <td colSpan={isAdmin ? 9 : 8}>
-                      Tháng này chưa có ca đăng ký.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <p className="staff-payroll-note">
-            Tổng giờ được tính từ check-in đến check-out, không tự trừ giờ nghỉ.
-            Giờ công được duyệt mới tính lương: tối đa 5 giờ/ca theo mức 20.000đ/giờ,
-            phần vượt 5 giờ tính 30.000đ/giờ. Nhân viên chỉ chấm công cho ca của
-            mình trong đúng ngày làm; quản trị viên có thể sửa giờ và duyệt công.
-          </p>
-        </>
+        </section>
       )}
+
+      {(shiftsError || actionError) && (
+        <div className="form-message form-message-error" role="alert">
+          {actionError || shiftsError}
+        </div>
+      )}
+
+      <section className="attendance-list">
+        <div className="attendance-list-heading">
+          <div>
+            <h2>{isAdmin ? "Các ca đã đăng ký" : "Ca làm của tôi"}</h2>
+            <p>
+              {isAdmin
+                ? "Những ca đã checkout cần quản lý xác nhận."
+                : "Nút check-in chỉ mở đúng ngày và sau giờ bắt đầu ca."}
+            </p>
+          </div>
+        </div>
+        {shiftsLoading && (
+          <p className="page-loading">Đang tải dữ liệu chấm công…</p>
+        )}
+        {!shiftsLoading && visibleShifts.length === 0 && (
+          <p className="empty-state">Không có ca làm trong tháng này.</p>
+        )}
+        <div className="attendance-card-list">
+          {visibleShifts.map((shift) => (
+            <AttendanceCard
+              key={shift.id}
+              shift={shift}
+              isAdmin={isAdmin}
+              now={now}
+              saving={savingShiftId === String(shift.id)}
+              onAttendance={handleAttendance}
+              onApprove={handleApproval}
+            />
+          ))}
+        </div>
+      </section>
     </section>
   );
 }

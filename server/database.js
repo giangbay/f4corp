@@ -258,6 +258,7 @@ export async function initializeDatabase() {
       start_time TIME NOT NULL,
       end_time TIME NOT NULL,
       note VARCHAR(300) NOT NULL DEFAULT '',
+      is_approved BOOLEAN NOT NULL DEFAULT FALSE,
       is_completed BOOLEAN NOT NULL DEFAULT FALSE,
       overtime_minutes INT UNSIGNED NOT NULL DEFAULT 0,
       completed_at TIMESTAMP NULL,
@@ -291,6 +292,13 @@ export async function initializeDatabase() {
       CONSTRAINT blog_posts_user_fk FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE CASCADE,
       INDEX blog_posts_created_at_idx (created_at, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS site_page_views (
+      view_date DATE NOT NULL,
+      path VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+      views INT UNSIGNED NOT NULL DEFAULT 0,
+      PRIMARY KEY (view_date, path)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -347,6 +355,12 @@ export async function initializeDatabase() {
 
   const [staffShiftColumns] = await database.query("SHOW COLUMNS FROM staff_shifts");
   const staffShiftColumnNames = new Set(staffShiftColumns.map(({ Field }) => Field));
+  if (!staffShiftColumnNames.has("is_approved")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT FALSE AFTER note",
+    );
+    await database.query("UPDATE staff_shifts SET is_approved = TRUE");
+  }
   if (!staffShiftColumnNames.has("is_completed")) {
     await database.query(
       "ALTER TABLE staff_shifts ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT FALSE AFTER note",

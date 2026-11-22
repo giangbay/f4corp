@@ -59,13 +59,18 @@ export default function StaffSchedulePage() {
 }
 
 function StaffScheduleContent({ user }) {
-  const { data: shifts, loading, error } = useApiResource("/staff-shifts");
-  const [savedShifts, setSavedShifts] = useState([]);
+  const {
+    data: shifts,
+    setData: setShifts,
+    loading,
+    error,
+  } = useApiResource("/staff-shifts");
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [realtimeError, setRealtimeError] = useState("");
   const [submittingSlot, setSubmittingSlot] = useState("");
   const [cancellingShiftId, setCancellingShiftId] = useState("");
+  const [approvingShiftId, setApprovingShiftId] = useState("");
   const [selectedDayKey, setSelectedDayKey] = useState(() =>
     formatDateKey(new Date()),
   );
@@ -78,18 +83,31 @@ function StaffScheduleContent({ user }) {
       setRealtimeError("Không thể kết nối cập nhật lịch trực tiếp.");
     });
     socket.on("staff-shift:created", (shift) => {
-      setSavedShifts((existing) => [
-        shift,
-        ...existing.filter((item) => item.id !== shift.id),
-      ]);
+      setShifts((existing) => [shift, ...existing.filter((item) => item.id !== shift.id)]);
     });
     socket.on("staff-shift:deleted", ({ id }) => {
-      setSavedShifts((existing) =>
+      setShifts((existing) =>
         existing.filter((shift) => String(shift.id) !== String(id)),
       );
     });
+    socket.on("staff-shift:approval-updated", ({ id, isApproved }) => {
+      setShifts((existing) =>
+        existing.map((shift) =>
+          String(shift.id) === String(id) ? { ...shift, isApproved } : shift,
+        ),
+      );
+    });
+    socket.on("staff-shift:attendance-updated", (updatedShift) => {
+      setShifts((existing) =>
+        existing.map((shift) =>
+          String(shift.id) === String(updatedShift.id)
+            ? { ...shift, ...updatedShift }
+            : shift,
+        ),
+      );
+    });
     return () => socket.disconnect();
-  }, []);
+  }, [setShifts]);
 
   async function registerShift(shiftDate, shiftOption) {
     setSubmitError("");
@@ -106,10 +124,7 @@ function StaffScheduleContent({ user }) {
           note,
         }),
       });
-      setSavedShifts((existing) => [
-        shift,
-        ...existing.filter((item) => item.id !== shift.id),
-      ]);
+      setShifts((existing) => [shift, ...existing.filter((item) => item.id !== shift.id)]);
       setNote("");
     } catch (requestError) {
       setSubmitError(requestError.message);
@@ -131,7 +146,7 @@ function StaffScheduleContent({ user }) {
     setCancellingShiftId(String(shift.id));
     try {
       await fetchApi(`/staff-shifts/${shift.id}`, { method: "DELETE" });
-      setSavedShifts((existing) =>
+      setShifts((existing) =>
         existing.filter((item) => String(item.id) !== String(shift.id)),
       );
     } catch (requestError) {
@@ -141,11 +156,7 @@ function StaffScheduleContent({ user }) {
     }
   }
 
-  const visibleShifts = Array.from(
-    new Map(
-      [...savedShifts, ...shifts].map((shift) => [shift.id, shift]),
-    ).values(),
-  ).sort((first, second) =>
+  const visibleShifts = [...shifts].sort((first, second) =>
     first.shiftDate.localeCompare(second.shiftDate) ||
     first.startTime.localeCompare(second.startTime),
   );
@@ -174,6 +185,9 @@ function StaffScheduleContent({ user }) {
     (shift) =>
       shift.shiftDate >= todayKey && shift.shiftDate <= registrationEndKey,
   );
+  const pendingApprovals = registrationWindowShifts.filter(
+    (shift) => !shift.isApproved,
+  ).length;
   const todayTime = `${String(today.getHours()).padStart(2, "0")}:${String(
     today.getMinutes(),
   ).padStart(2, "0")}`;
@@ -196,6 +210,28 @@ function StaffScheduleContent({ user }) {
     touchStartX.current = null;
     if (Math.abs(distance) < 45) return;
     selectAdjacentDay(distance < 0 ? 1 : -1);
+  }
+
+  async function approveShift(shift) {
+    setSubmitError("");
+    setApprovingShiftId(String(shift.id));
+    try {
+      const approval = await fetchApi(`/staff-shifts/${shift.id}/approval`, {
+        method: "PATCH",
+        body: JSON.stringify({ approved: true }),
+      });
+      setShifts((existing) =>
+        existing.map((item) =>
+          String(item.id) === String(approval.id)
+            ? { ...item, isApproved: approval.isApproved }
+            : item,
+        ),
+      );
+    } catch (requestError) {
+      setSubmitError(requestError.message);
+    } finally {
+      setApprovingShiftId("");
+    }
   }
 
   return (
@@ -225,6 +261,8 @@ function StaffScheduleContent({ user }) {
             <p className="shift-week-count">
               Lịch 07:00–23:00 · Ca tối kết thúc lúc 22:00, không đăng ký 22:00–23:00 ·{" "}
               {registrationWindowShifts.length} lượt trong 7 ngày
+              {user.role === "admin" && pendingApprovals > 0 &&
+                ` · ${pendingApprovals} ca chờ xác nhận`}
             </p>
             {user && ["staff", "admin"].includes(user.role) ? (
               <div className="shift-note-field">
@@ -369,6 +407,8 @@ function StaffScheduleContent({ user }) {
                             {slotShifts.map((registeredShift) => {
                               const canCancel =
                                 !registeredShift.isCompleted &&
+                                !registeredShift.checkInAt &&
+                                !registeredShift.checkOutAt &&
                                 (user?.role === "admin" ||
                                   (user?.role === "staff" &&
                                     !isStartedShift &&
@@ -380,8 +420,27 @@ function StaffScheduleContent({ user }) {
                                   key={registeredShift.id}
                                 >
                                   <strong>{registeredShift.staffName}</strong>
+                                  <span
+                                    className={`shift-approval-badge${registeredShift.isApproved ? " is-approved" : ""}`}
+                                  >
+                                    {registeredShift.isApproved
+                                      ? "Đã xác nhận"
+                                      : "Chờ quản lý xác nhận"}
+                                  </span>
                                   {registeredShift.note && (
                                     <span>{registeredShift.note}</span>
+                                  )}
+                                  {user.role === "admin" && !registeredShift.isApproved && (
+                                    <button
+                                      className="shift-approve-button"
+                                      type="button"
+                                      disabled={approvingShiftId === String(registeredShift.id)}
+                                      onClick={() => approveShift(registeredShift)}
+                                    >
+                                      {approvingShiftId === String(registeredShift.id)
+                                        ? "Đang xác nhận…"
+                                        : "Xác nhận lịch"}
+                                    </button>
                                   )}
                                   {canCancel && (
                                     <button

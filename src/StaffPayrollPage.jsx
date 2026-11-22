@@ -11,7 +11,7 @@ export default function StaffPayrollPage() {
   if (!user) return <Navigate to="/login" replace state={{ from: "/payroll" }} />;
   if (!["staff", "admin"].includes(user.role)) return <Navigate to="/chat" replace />;
 
-  if (user.role === "admin") return <StaffPayrollSection />;
+  if (user.role === "admin") return <StaffPayrollSection isAdmin />;
 
   return (
     <section className="admin-page">
