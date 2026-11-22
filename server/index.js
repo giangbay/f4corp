@@ -58,6 +58,71 @@ const menuImageUpload = multer({
 const isProduction =
   process.env.NODE_ENV === "production" || process.argv.includes("--production");
 
+function getVietnamDateTime() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map(({ type, value }) => [type, value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function getVietnamDate(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(date)
+      .map(({ type, value }) => [type, value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function getVietnamRegistrationEnd(date = getVietnamDate()) {
+  const [year, month, day] = date.split("-").map(Number);
+  const registrationEnd = new Date(Date.UTC(year, month - 1, day));
+  registrationEnd.setUTCDate(registrationEnd.getUTCDate() + 6);
+  return registrationEnd.toISOString().slice(0, 10);
+}
+
+function getVietnamScheduleStart(date = getVietnamDate()) {
+  const [year, month, day] = date.split("-").map(Number);
+  const scheduleStart = new Date(Date.UTC(year, month - 1, day));
+  scheduleStart.setUTCDate(scheduleStart.getUTCDate() - 2);
+  return scheduleStart.toISOString().slice(0, 10);
+}
+
+function toUtcSqlDateTime(date) {
+  return date.toISOString().slice(0, 23).replace("T", " ");
+}
+
+async function getStaffAttendance(shiftId) {
+  return one(`
+    SELECT id, user_id AS userId,
+      DATE_FORMAT(shift_date, '%Y-%m-%d') AS shiftDate,
+      TIME_FORMAT(start_time, '%H:%i') AS startTime,
+      TIME_FORMAT(end_time, '%H:%i') AS endTime,
+      DATE_FORMAT(check_in_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkInAt,
+      DATE_FORMAT(check_out_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkOutAt,
+      IF(check_in_at IS NOT NULL AND check_out_at IS NOT NULL,
+        TIMESTAMPDIFF(MINUTE, check_in_at, check_out_at), NULL) AS workedMinutes,
+      is_completed AS isCompleted
+    FROM staff_shifts
+    WHERE id = ?
+  `, [shiftId]);
+}
+
 app.disable("x-powered-by");
 app.use(helmet({
   contentSecurityPolicy: {
@@ -912,22 +977,83 @@ app.post(
   }),
 );
 
-app.get("/api/staff-shifts", asyncRoute(async (_request, response) => {
-  response.setHeader("Cache-Control", "no-store");
-  const shifts = await many(`
-    SELECT staff_shifts.id, staff_shifts.user_id AS userId,
-      users.name AS staffName,
-      DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
-      TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
-      TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
-      staff_shifts.note, staff_shifts.created_at AS createdAt
-    FROM staff_shifts
-    JOIN users ON users.id = staff_shifts.user_id
-    ORDER BY staff_shifts.shift_date, staff_shifts.start_time, staff_shifts.id
-    LIMIT 200
-  `);
-  response.json(shifts);
-}));
+app.get(
+  "/api/staff-shifts",
+  (request, response, next) => {
+    if (request.query.month !== undefined) {
+      return requireAuth(request, response, next);
+    }
+    next();
+  },
+  asyncRoute(async (request, response) => {
+    response.setHeader("Cache-Control", "no-store");
+    const hasMonth = request.query.month !== undefined;
+    if (
+      hasMonth &&
+      (typeof request.query.month !== "string" ||
+        !/^\d{4}-(0[1-9]|1[0-2])$/.test(request.query.month))
+    ) {
+      response.status(400).json({ error: "Tháng cần xem không hợp lệ." });
+      return;
+    }
+    const month = hasMonth ? request.query.month : "";
+    let whereClause = "";
+    let parameters = [];
+    if (month) {
+      if (!["staff", "admin"].includes(request.user.role)) {
+        response.status(403).json({
+          error: "Chỉ nhân viên hoặc quản trị viên mới có thể xem bảng công.",
+        });
+        return;
+      }
+      const [year, monthNumber] = month.split("-").map(Number);
+      if (year < 1000 || year > 9998) {
+        response.status(400).json({ error: "Tháng cần xem không hợp lệ." });
+        return;
+      }
+      const nextMonth = new Date(Date.UTC(year, monthNumber, 1))
+        .toISOString()
+        .slice(0, 10);
+      whereClause = "WHERE staff_shifts.shift_date >= ? AND staff_shifts.shift_date < ?";
+      parameters = [`${month}-01`, nextMonth];
+      if (request.user.role === "staff") {
+        whereClause += " AND staff_shifts.user_id = ?";
+        parameters.push(request.user.id);
+      }
+    } else {
+      const today = getVietnamDate();
+      whereClause =
+        "WHERE staff_shifts.shift_date >= ? AND staff_shifts.shift_date <= ?";
+      parameters = [
+        getVietnamScheduleStart(today),
+        getVietnamRegistrationEnd(today),
+      ];
+    }
+    const shifts = await many(`
+      SELECT staff_shifts.id, staff_shifts.user_id AS userId,
+        users.name AS staffName,
+        DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
+        TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
+        TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
+        staff_shifts.note, staff_shifts.is_completed AS isCompleted,
+        ${month ? `users.role AS staffRole,
+        staff_shifts.overtime_minutes AS overtimeMinutes,
+        staff_shifts.completed_at AS completedAt,
+        DATE_FORMAT(staff_shifts.check_in_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkInAt,
+        DATE_FORMAT(staff_shifts.check_out_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS checkOutAt,
+        IF(staff_shifts.check_in_at IS NOT NULL AND staff_shifts.check_out_at IS NOT NULL,
+          TIMESTAMPDIFF(MINUTE, staff_shifts.check_in_at, staff_shifts.check_out_at), NULL)
+          AS workedMinutes,` : ""}
+        staff_shifts.created_at AS createdAt
+      FROM staff_shifts
+      JOIN users ON users.id = staff_shifts.user_id
+      ${whereClause}
+      ORDER BY staff_shifts.shift_date, staff_shifts.start_time, staff_shifts.id
+      ${month ? "" : "LIMIT 200"}
+    `, parameters);
+    response.json(shifts);
+  }),
+);
 
 app.post(
   "/api/staff-shifts",
@@ -960,6 +1086,20 @@ app.post(
     }
     if (allowedShiftTimes.get(startTime) !== endTime) {
       response.status(400).json({ error: "Ca làm đã chọn không hợp lệ." });
+      return;
+    }
+    const today = getVietnamDate();
+    if (shiftDate < today || shiftDate > getVietnamRegistrationEnd(today)) {
+      response.status(400).json({
+        error: "Chỉ có thể đăng ký ca trong 7 ngày tới.",
+      });
+      return;
+    }
+    if (
+      shiftDate === today &&
+      getVietnamDateTime().slice(11, 16) >= endTime
+    ) {
+      response.status(400).json({ error: "Ca làm này đã kết thúc." });
       return;
     }
     if (note.length > 300) {
@@ -1014,7 +1154,10 @@ app.post(
           DATE_FORMAT(staff_shifts.shift_date, '%Y-%m-%d') AS shiftDate,
           TIME_FORMAT(staff_shifts.start_time, '%H:%i') AS startTime,
           TIME_FORMAT(staff_shifts.end_time, '%H:%i') AS endTime,
-          staff_shifts.note, staff_shifts.created_at AS createdAt
+          staff_shifts.note, staff_shifts.is_completed AS isCompleted,
+          staff_shifts.overtime_minutes AS overtimeMinutes,
+          staff_shifts.completed_at AS completedAt,
+          staff_shifts.created_at AS createdAt
         FROM staff_shifts
         JOIN users ON users.id = staff_shifts.user_id
         WHERE staff_shifts.id = ?
@@ -1044,6 +1187,325 @@ app.post(
   }),
 );
 
+app.post(
+  "/api/staff-shifts/:shiftId/check-in",
+  requireAuth,
+  requireStaffOrAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      response.status(400).json({ error: "Ca làm không hợp lệ." });
+      return;
+    }
+    const shift = await getStaffAttendance(shiftId);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+    if (String(shift.userId) !== String(request.user.id)) {
+      response.status(403).json({ error: "Bạn chỉ có thể chấm công cho ca của mình." });
+      return;
+    }
+    if (shift.shiftDate !== getVietnamDate()) {
+      response.status(400).json({ error: "Chỉ có thể check-in trong ngày của ca." });
+      return;
+    }
+    if (`${shift.shiftDate}T${shift.startTime}` > getVietnamDateTime()) {
+      response.status(400).json({ error: "Chỉ có thể check-in từ giờ bắt đầu ca." });
+      return;
+    }
+    if (`${shift.shiftDate}T${shift.endTime}` <= getVietnamDateTime()) {
+      response.status(400).json({ error: "Ca làm đã kết thúc, không thể check-in." });
+      return;
+    }
+    if (shift.checkInAt) {
+      response.status(409).json({ error: "Ca này đã được check-in." });
+      return;
+    }
+
+    const result = await execute(`
+      UPDATE staff_shifts
+      SET check_in_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND check_in_at IS NULL
+    `, [shiftId]);
+    if (result.affectedRows !== 1) {
+      response.status(409).json({ error: "Ca này vừa được check-in ở nơi khác." });
+      return;
+    }
+    response.json(await getStaffAttendance(shiftId));
+  }),
+);
+
+app.post(
+  "/api/staff-shifts/:shiftId/check-out",
+  requireAuth,
+  requireStaffOrAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      response.status(400).json({ error: "Ca làm không hợp lệ." });
+      return;
+    }
+    const shift = await getStaffAttendance(shiftId);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+    if (String(shift.userId) !== String(request.user.id)) {
+      response.status(403).json({ error: "Bạn chỉ có thể chấm công cho ca của mình." });
+      return;
+    }
+    if (!shift.checkInAt) {
+      response.status(409).json({ error: "Cần check-in trước khi check-out." });
+      return;
+    }
+    if (shift.checkOutAt) {
+      response.status(409).json({ error: "Ca này đã được check-out." });
+      return;
+    }
+    if (shift.shiftDate !== getVietnamDate()) {
+      response.status(400).json({ error: "Chỉ có thể check-out trong ngày của ca." });
+      return;
+    }
+
+    const result = await execute(`
+      UPDATE staff_shifts
+      SET check_out_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND check_in_at IS NOT NULL AND check_out_at IS NULL
+        AND check_in_at < UTC_TIMESTAMP(3)
+    `, [shiftId]);
+    if (result.affectedRows !== 1) {
+      response.status(409).json({ error: "Không thể check-out ca này." });
+      return;
+    }
+    response.json(await getStaffAttendance(shiftId));
+  }),
+);
+
+app.patch(
+  "/api/staff-shifts/:shiftId/attendance",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    const checkInValue = request.body?.checkInAt;
+    const checkOutValue = request.body?.checkOutAt;
+    if (!Number.isSafeInteger(shiftId) || shiftId < 1) {
+      response.status(400).json({ error: "Ca làm không hợp lệ." });
+      return;
+    }
+    if (
+      !(
+        (checkInValue === null && checkOutValue === null) ||
+        (typeof checkInValue === "string" && typeof checkOutValue === "string")
+      )
+    ) {
+      response.status(400).json({
+        error: "Cần nhập cả thời điểm check-in và check-out, hoặc xóa cả hai.",
+      });
+      return;
+    }
+    const shift = await getStaffAttendance(shiftId);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+
+    let checkIn = null;
+    let checkOut = null;
+    if (checkInValue !== null) {
+      checkIn = new Date(checkInValue);
+      checkOut = new Date(checkOutValue);
+      const now = new Date();
+      if (!Number.isFinite(checkIn.getTime()) || !Number.isFinite(checkOut.getTime())) {
+        response.status(400).json({ error: "Thời gian chấm công không hợp lệ." });
+        return;
+      }
+      if (
+        getVietnamDate(checkIn) !== shift.shiftDate ||
+        getVietnamDate(checkOut) !== shift.shiftDate ||
+        checkOut <= checkIn ||
+        checkOut > now ||
+        checkIn > now ||
+        checkOut.getTime() - checkIn.getTime() > 24 * 60 * 60 * 1000
+      ) {
+        response.status(400).json({
+          error: "Giờ chấm công phải cùng ngày ca, checkout sau check-in và không ở tương lai.",
+        });
+        return;
+      }
+    }
+
+    await execute(`
+      UPDATE staff_shifts
+      SET check_in_at = ?, check_out_at = ?,
+        is_completed = IF(? IS NULL OR ? IS NULL, FALSE, is_completed),
+        overtime_minutes = IF(? IS NULL OR ? IS NULL, 0, overtime_minutes),
+        completed_at = IF(? IS NULL OR ? IS NULL, NULL, completed_at)
+      WHERE id = ?
+    `, [
+      checkIn ? toUtcSqlDateTime(checkIn) : null,
+      checkOut ? toUtcSqlDateTime(checkOut) : null,
+      checkIn ? toUtcSqlDateTime(checkIn) : null,
+      checkOut ? toUtcSqlDateTime(checkOut) : null,
+      checkIn ? toUtcSqlDateTime(checkIn) : null,
+      checkOut ? toUtcSqlDateTime(checkOut) : null,
+      checkIn ? toUtcSqlDateTime(checkIn) : null,
+      checkOut ? toUtcSqlDateTime(checkOut) : null,
+      shiftId,
+    ]);
+    response.json(await getStaffAttendance(shiftId));
+  }),
+);
+
+app.patch(
+  "/api/staff-shifts/:shiftId/completion",
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const shiftId = Number(request.params.shiftId);
+    const completed = request.body?.completed;
+    if (
+      !Number.isSafeInteger(shiftId) ||
+      shiftId < 1 ||
+      typeof completed !== "boolean"
+    ) {
+      response.status(400).json({ error: "Thông tin xác nhận ca không hợp lệ." });
+      return;
+    }
+    const shift = await one(`
+      SELECT DATE_FORMAT(shift_date, '%Y-%m-%d') AS shiftDate,
+        TIME_FORMAT(end_time, '%H:%i') AS endTime,
+        check_in_at AS checkInAt, check_out_at AS checkOutAt
+      FROM staff_shifts
+      WHERE id = ?
+    `, [shiftId]);
+    if (!shift) {
+      response.status(404).json({ error: "Không tìm thấy ca làm này." });
+      return;
+    }
+    if (completed) {
+      if (!shift.checkInAt || !shift.checkOutAt) {
+        response.status(409).json({
+          error: "Cần có check-in và check-out trước khi xác nhận ca.",
+        });
+        return;
+      }
+      if (`${shift.shiftDate}T${shift.endTime}` > getVietnamDateTime()) {
+        response.status(400).json({
+          error: "Chỉ có thể xác nhận ca sau khi giờ làm kết thúc.",
+        });
+        return;
+      }
+    }
+    const result = await execute(`
+      UPDATE staff_shifts
+      SET is_completed = ?,
+        completed_at = IF(?, CURRENT_TIMESTAMP, NULL)
+      WHERE id = ?
+    `, [completed, completed, shiftId]);
+    if (result.affectedRows !== 1) {
+      const existingShift = await one(
+        "SELECT id FROM staff_shifts WHERE id = ?",
+        [shiftId],
+      );
+      if (!existingShift) {
+        response.status(404).json({ error: "Không tìm thấy ca làm này." });
+        return;
+      }
+    }
+    response.json({ id: shiftId, isCompleted: completed });
+  }),
+);
+
+app.get(
+  "/api/blog",
+  asyncRoute(async (_request, response) => {
+    response.setHeader("Cache-Control", "no-store");
+    const articles = await many(`
+      SELECT blog_posts.id, blog_posts.title,
+        COALESCE(NULLIF(blog_posts.excerpt, ''),
+          CONCAT(LEFT(blog_posts.content, 260), '…')) AS excerpt,
+        users.name AS authorName, blog_posts.created_at AS createdAt
+      FROM blog_posts
+      JOIN users ON users.id = blog_posts.user_id
+      ORDER BY blog_posts.created_at DESC, blog_posts.id DESC
+      LIMIT 50
+    `);
+    response.json(articles);
+  }),
+);
+
+app.get(
+  "/api/blog/:blogId",
+  asyncRoute(async (request, response) => {
+    const blogId = Number(request.params.blogId);
+    if (!Number.isSafeInteger(blogId) || blogId < 1) {
+      response.status(400).json({ error: "Bài viết không hợp lệ." });
+      return;
+    }
+    response.setHeader("Cache-Control", "no-store");
+    const article = await one(`
+      SELECT blog_posts.id, blog_posts.title, blog_posts.excerpt,
+        blog_posts.content, users.name AS authorName,
+        blog_posts.created_at AS createdAt
+      FROM blog_posts
+      JOIN users ON users.id = blog_posts.user_id
+      WHERE blog_posts.id = ?
+    `, [blogId]);
+    if (!article) {
+      response.status(404).json({ error: "Không tìm thấy bài viết." });
+      return;
+    }
+    response.json(article);
+  }),
+);
+
+app.post(
+  "/api/blog",
+  chatWriteLimiter,
+  requireAuth,
+  requireAdmin,
+  asyncRoute(async (request, response) => {
+    const title = typeof request.body?.title === "string"
+      ? request.body.title.trim()
+      : "";
+    const excerpt = typeof request.body?.excerpt === "string"
+      ? request.body.excerpt.trim()
+      : "";
+    const content = typeof request.body?.content === "string"
+      ? request.body.content.trim()
+      : "";
+
+    if (title.length < 3 || title.length > 160) {
+      response.status(400).json({ error: "Tiêu đề cần có từ 3 đến 160 ký tự." });
+      return;
+    }
+    if (excerpt.length > 400) {
+      response.status(400).json({ error: "Mô tả ngắn tối đa 400 ký tự." });
+      return;
+    }
+    if (content.length < 20 || content.length > 50000) {
+      response.status(400).json({ error: "Nội dung bài viết cần từ 20 đến 50.000 ký tự." });
+      return;
+    }
+
+    const result = await execute(`
+      INSERT INTO blog_posts (user_id, title, excerpt, content)
+      VALUES (?, ?, ?, ?)
+    `, [request.user.id, title, excerpt, content]);
+    const article = await one(`
+      SELECT blog_posts.id, blog_posts.title, blog_posts.excerpt,
+        blog_posts.content, users.name AS authorName,
+        blog_posts.created_at AS createdAt
+      FROM blog_posts
+      JOIN users ON users.id = blog_posts.user_id
+      WHERE blog_posts.id = ?
+    `, [result.insertId]);
+    response.status(201).json(article);
+  }),
+);
+
 app.delete(
   "/api/staff-shifts/:shiftId",
   requireAuth,
@@ -1059,7 +1521,9 @@ app.delete(
       SELECT id, user_id AS userId,
         DATE_FORMAT(shift_date, '%Y-%m-%d') AS shiftDate,
         TIME_FORMAT(start_time, '%H:%i') AS startTime,
-        TIME_FORMAT(end_time, '%H:%i') AS endTime
+        TIME_FORMAT(end_time, '%H:%i') AS endTime,
+        is_completed AS isCompleted,
+        check_in_at AS checkInAt, check_out_at AS checkOutAt
       FROM staff_shifts
       WHERE id = ?
     `, [shiftId]);
@@ -1067,11 +1531,32 @@ app.delete(
       response.status(404).json({ error: "Không tìm thấy ca làm này." });
       return;
     }
+    if (shift.isCompleted) {
+      response.status(409).json({
+        error: "Không thể hủy ca đã xác nhận hoàn thành. Hãy bỏ xác nhận trước.",
+      });
+      return;
+    }
+    if (shift.checkInAt || shift.checkOutAt) {
+      response.status(409).json({
+        error: "Không thể hủy ca đã có dữ liệu chấm công.",
+      });
+      return;
+    }
     if (
       request.user.role !== "admin" &&
       String(shift.userId) !== String(request.user.id)
     ) {
       response.status(403).json({ error: "Bạn chỉ có thể hủy ca do mình đăng ký." });
+      return;
+    }
+    if (
+      request.user.role !== "admin" &&
+      `${shift.shiftDate}T${shift.startTime}` <= getVietnamDateTime()
+    ) {
+      response.status(409).json({
+        error: "Ca đã bắt đầu nên không thể tự hủy. Vui lòng liên hệ quản trị viên.",
+      });
       return;
     }
 

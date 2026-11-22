@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { getMenuItemPath } from "../menuSlug.js";
 
-function formatReviewDate(value) {
+function formatPublishDate(value) {
   return new Date(value).toLocaleDateString("vi-VN", {
     day: "numeric",
     month: "short",
@@ -9,12 +9,18 @@ function formatReviewDate(value) {
   });
 }
 
-export default function MenuItemSidebar({ products, reviewState }) {
-  const { reviews, loading: reviewsLoading, error: reviewsError } = reviewState;
-
+export default function MenuItemSidebar({
+  products,
+  blogPosts,
+  blogLoading,
+  blogError,
+}) {
   return (
-    <aside className="menu-item-visitor-sidebar" aria-label="Gợi ý và bình luận">
-      <section className="menu-item-sidebar-section" aria-labelledby="menu-suggestions-heading">
+    <aside className="menu-item-visitor-sidebar" aria-label="Món gợi ý và blog mới">
+      <section
+        className="menu-item-sidebar-section"
+        aria-labelledby="menu-suggestions-heading"
+      >
         <span className="eyebrow">Có thể bạn sẽ thích</span>
         <h2 id="menu-suggestions-heading">Món gợi ý</h2>
         {products.length ? (
@@ -38,33 +44,34 @@ export default function MenuItemSidebar({ products, reviewState }) {
         )}
       </section>
 
-      <section className="menu-item-sidebar-section" aria-labelledby="menu-latest-reviews-heading">
-        <span className="eyebrow">Chia sẻ từ khách hàng</span>
-        <h2 id="menu-latest-reviews-heading">Bình luận mới</h2>
-        {reviewsLoading ? (
-          <p className="menu-item-sidebar-empty">Đang tải bình luận…</p>
-        ) : reviewsError ? (
-          <p className="menu-item-sidebar-empty">Chưa thể tải bình luận.</p>
-        ) : reviews.length ? (
-          <div className="menu-item-latest-reviews">
-            {reviews.slice(0, 3).map((review) => (
-              <article className="menu-item-latest-review" key={review.id}>
-                <div>
-                  <strong>{review.authorName}</strong>
-                  <time dateTime={review.createdAt}>
-                    {formatReviewDate(review.createdAt)}
-                  </time>
-                </div>
-                <span className="menu-item-latest-rating" aria-label={`${review.rating} trên 5 sao`}>
-                  ★ {review.rating}/5
-                </span>
-                <p>{review.content}</p>
+      <section
+        className="menu-item-sidebar-section"
+        aria-labelledby="menu-latest-blog-heading"
+      >
+        <span className="eyebrow">Từ nhật ký của Mộc</span>
+        <h2 id="menu-latest-blog-heading">Bài viết blog mới</h2>
+        {blogLoading ? (
+          <p className="menu-item-sidebar-empty">Đang tải bài viết…</p>
+        ) : blogError ? (
+          <p className="menu-item-sidebar-empty">Chưa thể tải bài viết.</p>
+        ) : blogPosts.length ? (
+          <div className="menu-item-latest-blog">
+            {blogPosts.slice(0, 3).map((post) => (
+              <article className="menu-item-latest-blog-post" key={post.id}>
+                <Link to={`/blog/${post.id}`}>{post.title}</Link>
+                <time dateTime={post.createdAt}>
+                  {formatPublishDate(post.createdAt)}
+                </time>
+                <p>{post.excerpt}</p>
               </article>
             ))}
           </div>
         ) : (
-          <p className="menu-item-sidebar-empty">Chưa có bình luận nào cho món này.</p>
+          <p className="menu-item-sidebar-empty">Chưa có bài viết blog nào.</p>
         )}
+        <Link className="menu-item-blog-all" to="/blog">
+          Xem tất cả bài viết →
+        </Link>
       </section>
     </aside>
   );

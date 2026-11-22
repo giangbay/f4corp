@@ -12,6 +12,7 @@ export default function SiteFooter() {
           <Link to="/story">Câu chuyện</Link>
           <Link to="/space">Không gian</Link>
           <Link to="/menu">Thực đơn</Link>
+          <Link to="/blog">Blog</Link>
           <Link to="/visit">Liên hệ</Link>
         </div>
       </div>

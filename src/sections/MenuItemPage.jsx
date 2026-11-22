@@ -14,13 +14,13 @@ export default function MenuItemPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: items, loading, error } = useApiResource("/menu");
+  const {
+    data: blogPosts,
+    loading: blogLoading,
+    error: blogError,
+  } = useApiResource("/blog");
   const item = items.find((menuItem) => getMenuItemPath(menuItem).slice(6) === slug);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [latestReviewState, setLatestReviewState] = useState({
-    reviews: [],
-    loading: true,
-    error: "",
-  });
   const galleryImages = item?.galleryImages?.length
     ? item.galleryImages
     : item
@@ -29,7 +29,6 @@ export default function MenuItemPage() {
 
   useEffect(() => {
     setSelectedImageIndex(0);
-    setLatestReviewState({ reviews: [], loading: true, error: "" });
   }, [item?.id]);
 
   if (loading || error) {
@@ -155,6 +154,14 @@ export default function MenuItemPage() {
                     <Link className="text-link" to="/menu">
                       ← Quay lại thực đơn
                     </Link>
+                    {user?.role === "admin" && (
+                      <Link
+                        className="text-link"
+                        to={`/admin?edit=${encodeURIComponent(item.id)}#admin-product-form`}
+                      >
+                        Chỉnh sửa sản phẩm →
+                      </Link>
+                    )}
                   </div>
                 </div>
               </article>
@@ -169,7 +176,6 @@ export default function MenuItemPage() {
               <MenuReviews
                 menuId={item.id}
                 menuName={item.name}
-                onReviewsChange={setLatestReviewState}
               />
               {user?.role === "admin" && bestSellerItems.length > 0 && (
                 <section
@@ -210,34 +216,12 @@ export default function MenuItemPage() {
                 </section>
               )}
             </div>
-            {user?.role === "admin" && (
-              <aside className="menu-item-admin-panel" aria-label="Quản trị sản phẩm">
-                <span className="admin-panel-icon" aria-hidden="true">
-                  ✎
-                </span>
-                <span className="eyebrow">Quản trị</span>
-                <h2>Chỉnh sửa sản phẩm</h2>
-                <p>
-                  Cập nhật tên món, danh mục, giá, hình ảnh và nội dung giới
-                  thiệu ngay trong trang quản lý.
-                </p>
-                <Link
-                  className="button"
-                  to={`/admin?edit=${encodeURIComponent(item.id)}#admin-product-form`}
-                >
-                  Chỉnh sửa món này
-                </Link>
-                <span className="menu-item-admin-note">
-                  Chỉ quản trị viên mới nhìn thấy khu vực này.
-                </span>
-              </aside>
-            )}
-            {user?.role !== "admin" && (
-              <MenuItemSidebar
-                products={suggestedItems}
-                reviewState={latestReviewState}
-              />
-            )}
+            <MenuItemSidebar
+              products={suggestedItems}
+              blogPosts={Array.isArray(blogPosts) ? blogPosts : []}
+              blogLoading={blogLoading}
+              blogError={blogError}
+            />
           </div>
         </div>
       </section>

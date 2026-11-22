@@ -9,6 +9,7 @@ import ScrollToLocation from "./components/ScrollToLocation.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import SiteHeader from "./components/SiteHeader.jsx";
 import { OrderProvider } from "./OrderContext.jsx";
+import BlogPage from "./sections/BlogPage.jsx";
 import HomePage from "./sections/HomePage.jsx";
 import MenuItemPage from "./sections/MenuItemPage.jsx";
 import MenuPage from "./sections/MenuPage.jsx";
@@ -30,6 +31,8 @@ export default function App() {
           <Route path="/space" element={<SpacePage />} />
           <Route path="/menu/:slug" element={<MenuItemPage />} />
           <Route path="/menu" element={<MenuPage />} />
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:blogId" element={<BlogPage />} />
           <Route path="/visit" element={<VisitPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/chat" element={<ChatPage />} />

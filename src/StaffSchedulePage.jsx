@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { io } from "socket.io-client";
 import { fetchApi, useApiResource } from "./api.js";
 import { useAuth } from "./AuthContext.jsx";
+import StaffPayrollSection from "./StaffPayrollSection.jsx";
 
 const SHIFT_OPTIONS = [
   { name: "Sáng", tone: "morning", startTime: "07:00", endTime: "12:00" },
@@ -29,6 +30,15 @@ function formatDayMonth(date) {
   }).format(date);
 }
 
+function getScheduleDates(today) {
+  return Array.from({ length: 9 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index - 2);
+    date.setHours(12, 0, 0, 0);
+    return date;
+  });
+}
+
 export default function StaffSchedulePage() {
   const { user } = useAuth();
   const { data: shifts, loading, error } = useApiResource("/staff-shifts");
@@ -38,6 +48,10 @@ export default function StaffSchedulePage() {
   const [realtimeError, setRealtimeError] = useState("");
   const [submittingSlot, setSubmittingSlot] = useState("");
   const [cancellingShiftId, setCancellingShiftId] = useState("");
+  const [selectedDayKey, setSelectedDayKey] = useState(() =>
+    formatDateKey(new Date()),
+  );
+  const touchStartX = useRef(null);
 
   useEffect(() => {
     const socket = io();
@@ -119,18 +133,52 @@ export default function StaffSchedulePage() {
   );
   const today = new Date();
   const todayKey = formatDateKey(today);
-  const upcomingDays = Array.from({ length: 3 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() + index);
-    return date;
-  });
-  const upcomingDateKeys = new Set(upcomingDays.map(formatDateKey));
-  const upcomingShifts = visibleShifts.filter((shift) =>
-    upcomingDateKeys.has(shift.shiftDate),
+  const scheduleDates = getScheduleDates(today);
+  const registrationEnd = new Date(today);
+  registrationEnd.setDate(today.getDate() + 6);
+  const registrationEndKey = formatDateKey(registrationEnd);
+  const selectedDayIndex = scheduleDates.findIndex(
+    (date) => formatDateKey(date) === selectedDayKey,
+  );
+  const activeDayIndex =
+    selectedDayIndex === -1
+      ? scheduleDates.findIndex((date) => formatDateKey(date) === todayKey)
+      : selectedDayIndex;
+  const selectedDate = scheduleDates[activeDayIndex];
+  const selectedDateKey = formatDateKey(selectedDate);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayKey = formatDateKey(yesterday);
+  const selectedDayShifts = visibleShifts.filter(
+    (shift) => shift.shiftDate === selectedDateKey,
+  );
+  const registrationWindowShifts = visibleShifts.filter(
+    (shift) =>
+      shift.shiftDate >= todayKey && shift.shiftDate <= registrationEndKey,
   );
   const todayTime = `${String(today.getHours()).padStart(2, "0")}:${String(
     today.getMinutes(),
   ).padStart(2, "0")}`;
+  const canSelectPreviousDay = activeDayIndex > 0;
+  const canSelectNextDay = activeDayIndex < scheduleDates.length - 1;
+
+  function selectAdjacentDay(direction) {
+    const nextIndex = activeDayIndex + direction;
+    if (nextIndex < 0 || nextIndex >= scheduleDates.length) return;
+    setSelectedDayKey(formatDateKey(scheduleDates[nextIndex]));
+  }
+
+  function handleDayTouchStart(event) {
+    touchStartX.current = event.changedTouches[0]?.clientX ?? null;
+  }
+
+  function handleDayTouchEnd(event) {
+    if (touchStartX.current === null) return;
+    const distance = event.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(distance) < 45) return;
+    selectAdjacentDay(distance < 0 ? 1 : -1);
+  }
 
   return (
     <section className="staff-shifts">
@@ -139,7 +187,8 @@ export default function StaffSchedulePage() {
           <span className="eyebrow">Lịch làm việc tại Mộc</span>
           <h1>Đăng ký giờ làm</h1>
           <p>
-            Chọn ca trong 3 ngày gần nhất. Mỗi ca tối đa 2 nhân viên.
+            Đăng ký ca trong 7 ngày tới. Có thể xem thêm 2 ngày vừa qua;
+            mỗi ca tối đa 2 nhân viên.
           </p>
         </header>
         <div className="shift-content">
@@ -148,14 +197,13 @@ export default function StaffSchedulePage() {
               <div>
                 <h2 id="shift-board-title">Lịch đăng ký chung</h2>
                 <span className="shift-week-range">
-                  {formatDayMonth(upcomingDays[0])} –{" "}
-                  {formatDayMonth(upcomingDays[upcomingDays.length - 1])}
+                  {formatDayMonth(today)} – {formatDayMonth(registrationEnd)}
                 </span>
               </div>
             </div>
             <p className="shift-week-count">
               Lịch 07:00–23:00 · Ca tối kết thúc lúc 22:00, không đăng ký 22:00–23:00 ·{" "}
-              {upcomingShifts.length} lượt trong 3 ngày
+              {registrationWindowShifts.length} lượt trong 7 ngày
             </p>
             {user && ["staff", "admin"].includes(user.role) ? (
               <div className="shift-note-field">
@@ -199,165 +247,190 @@ export default function StaffSchedulePage() {
               </p>
             )}
             {!error && (
-              <div className="shift-week-scroll">
-                <div className="shift-week-grid">
-                  <div className="shift-time-axis-row" aria-hidden="true">
-                    <span className="shift-time-axis-title">Ngày / giờ</span>
-                    <div className="shift-time-axis">
-                      {Array.from({ length: 16 }, (_, index) => index + 7).map(
-                        (hour) => (
-                          <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
-                        ),
-                      )}
-                      <span className="shift-time-axis-end">23:00</span>
-                    </div>
-                  </div>
-                  {upcomingDays.map((date) => {
-                    const dateKey = formatDateKey(date);
-                    const dayShifts = upcomingShifts.filter(
-                      (shift) => shift.shiftDate === dateKey,
-                    );
-                    const isPastDate = dateKey < todayKey;
-                    const dayTitle =
-                      dateKey === todayKey
+              <div className="shift-day-carousel">
+                <div className="shift-day-navigation">
+                  <button
+                    className="shift-day-arrow"
+                    type="button"
+                    aria-label="Xem ngày trước"
+                    disabled={!canSelectPreviousDay}
+                    onClick={() => selectAdjacentDay(-1)}
+                  >
+                    <span aria-hidden="true">←</span>
+                  </button>
+                  <div className="shift-day-current" aria-live="polite">
+                    <span>
+                      {selectedDateKey === todayKey
                         ? "Hôm nay"
-                        : dateKey === formatDateKey(upcomingDays[1])
-                          ? "Ngày mai"
-                          : "Ngày kia";
+                        : selectedDateKey < todayKey
+                          ? selectedDateKey === yesterdayKey
+                            ? "Hôm qua"
+                            : "Hai ngày trước"
+                          : formatWeekday(selectedDate)}
+                    </span>
+                    <strong>{selectedDate.getDate()}</strong>
+                    <span>
+                      {new Intl.DateTimeFormat("vi-VN", {
+                        month: "long",
+                        year: "numeric",
+                      }).format(selectedDate)}
+                    </span>
+                  </div>
+                  <button
+                    className="shift-day-arrow"
+                    type="button"
+                    aria-label="Xem ngày tiếp theo"
+                    disabled={!canSelectNextDay}
+                    onClick={() => selectAdjacentDay(1)}
+                  >
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+                <div
+                  key={selectedDateKey}
+                  className={`shift-day${selectedDateKey === todayKey ? " is-today" : ""}${selectedDateKey < todayKey ? " is-past" : ""}`}
+                  onTouchStart={handleDayTouchStart}
+                  onTouchEnd={handleDayTouchEnd}
+                  aria-label={`${formatWeekday(selectedDate)} ${selectedDate.getDate()}`}
+                >
+                  <header className="shift-day-heading">
+                    <span>
+                      {selectedDateKey === todayKey
+                        ? "Lịch hôm nay"
+                        : selectedDateKey < todayKey
+                          ? "Lịch đã qua"
+                          : `Lịch ${formatWeekday(selectedDate)}`}
+                    </span>
+                    <span className="shift-day-weekday">
+                      {formatWeekday(selectedDate)}
+                    </span>
+                  </header>
+                  <div className="shift-day-timeline">
+                    {SHIFT_OPTIONS.map((shiftOption) => {
+                      const slotShifts = selectedDayShifts.filter(
+                        (shift) =>
+                          shift.startTime === shiftOption.startTime &&
+                          shift.endTime === shiftOption.endTime,
+                      );
+                      const alreadyRegistered = slotShifts.some(
+                        (shift) => String(shift.userId) === String(user?.id),
+                      );
+                      const isFull = slotShifts.length >= 2;
+                      const isPastShift =
+                        selectedDateKey < todayKey ||
+                        (selectedDateKey === todayKey &&
+                          todayTime >= shiftOption.endTime);
+                      const isStartedShift =
+                        selectedDateKey < todayKey ||
+                        (selectedDateKey === todayKey &&
+                          todayTime >= shiftOption.startTime);
+                      const isWithinRegistrationWindow =
+                        selectedDateKey >= todayKey &&
+                        selectedDateKey <= registrationEndKey;
+                      const slotKey = `${selectedDateKey}:${shiftOption.startTime}`;
+                      const isEligible =
+                        user && ["staff", "admin"].includes(user.role);
 
-                    return (
-                      <section
-                        className={`shift-day${dateKey === todayKey ? " is-today" : ""}`}
-                        key={dateKey}
-                        aria-label={`${formatWeekday(date)} ${date.getDate()}`}
-                      >
-                        <header className="shift-day-heading">
-                          <span>{dayTitle}</span>
-                          <strong>{date.getDate()}</strong>
-                          <span className="shift-day-month">
-                            {new Intl.DateTimeFormat("vi-VN", {
-                              month: "short",
-                            }).format(date)}
-                          </span>
-                        </header>
-                        <div className="shift-day-timeline">
-                          {SHIFT_OPTIONS.map((shiftOption) => {
-                            const slotShifts = dayShifts.filter(
-                              (shift) =>
-                                shift.startTime === shiftOption.startTime &&
-                                shift.endTime === shiftOption.endTime,
-                            );
-                            const alreadyRegistered = slotShifts.some(
-                              (shift) => String(shift.userId) === String(user?.id),
-                            );
-                            const isFull = slotShifts.length >= 2;
-                            const isPastShift =
-                              isPastDate ||
-                              (dateKey === todayKey &&
-                                todayTime >= shiftOption.endTime);
-                            const slotKey = `${dateKey}:${shiftOption.startTime}`;
-                            const isEligible =
-                              user && ["staff", "admin"].includes(user.role);
-
-                            return (
-                              <article
-                                className={`shift-slot shift-slot-${shiftOption.tone}${isFull ? " is-full" : ""}`}
-                                style={{
-                                  gridColumn: `${
-                                    Number(shiftOption.startTime.slice(0, 2)) - 6
-                                  } / span 5`,
-                                }}
-                                key={shiftOption.startTime}
-                              >
-                                <div className="shift-slot-time">
-                                  <span>{shiftOption.name}</span>
-                                  <time
-                                    dateTime={`${shiftOption.startTime}/${shiftOption.endTime}`}
-                                  >
-                                    {shiftOption.startTime}–{shiftOption.endTime}
-                                  </time>
-                                </div>
-                                <div className="shift-slot-staff">
-                                  {slotShifts.map((registeredShift) => {
-                                    const canCancel =
-                                      user?.role === "admin" ||
-                                      (user?.role === "staff" &&
-                                        String(registeredShift.userId) ===
-                                          String(user.id));
-                                    return (
-                                      <div
-                                        className="shift-slot-person"
-                                        key={registeredShift.id}
-                                      >
-                                        <strong>{registeredShift.staffName}</strong>
-                                        {registeredShift.note && (
-                                          <span>{registeredShift.note}</span>
-                                        )}
-                                        {canCancel && (
-                                          <button
-                                            className="shift-cancel-button"
-                                            type="button"
-                                            disabled={
-                                              cancellingShiftId ===
-                                              String(registeredShift.id)
-                                            }
-                                            onClick={() =>
-                                              cancelShift(registeredShift)
-                                            }
-                                          >
-                                            {cancellingShiftId ===
-                                            String(registeredShift.id)
-                                              ? "Đang hủy…"
-                                              : "Hủy ca"}
-                                          </button>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="shift-slot-action">
-                                  <span>
-                                    {slotShifts.length}/2 nhân viên
-                                  </span>
-                                  {isEligible && (
+                      return (
+                        <article
+                          className={`shift-slot shift-slot-${shiftOption.tone}${isFull ? " is-full" : ""}`}
+                          key={shiftOption.startTime}
+                        >
+                          <div className="shift-slot-time">
+                            <span>{shiftOption.name}</span>
+                            <time
+                              dateTime={`${shiftOption.startTime}/${shiftOption.endTime}`}
+                            >
+                              {shiftOption.startTime}–{shiftOption.endTime}
+                            </time>
+                          </div>
+                          <div className="shift-slot-staff">
+                            {slotShifts.map((registeredShift) => {
+                              const canCancel =
+                                !registeredShift.isCompleted &&
+                                (user?.role === "admin" ||
+                                  (user?.role === "staff" &&
+                                    !isStartedShift &&
+                                    String(registeredShift.userId) ===
+                                      String(user.id)));
+                              return (
+                                <div
+                                  className="shift-slot-person"
+                                  key={registeredShift.id}
+                                >
+                                  <strong>{registeredShift.staffName}</strong>
+                                  {registeredShift.note && (
+                                    <span>{registeredShift.note}</span>
+                                  )}
+                                  {canCancel && (
                                     <button
-                                      className="shift-register-button"
+                                      className="shift-cancel-button"
                                       type="button"
                                       disabled={
-                                        loading ||
-                                        isPastShift ||
-                                        isFull ||
-                                        alreadyRegistered ||
-                                        submittingSlot === slotKey
+                                        cancellingShiftId ===
+                                        String(registeredShift.id)
                                       }
                                       onClick={() =>
-                                        registerShift(dateKey, shiftOption)
+                                        cancelShift(registeredShift)
                                       }
                                     >
-                                      {submittingSlot === slotKey
-                                        ? "Đang đăng ký…"
-                                        : alreadyRegistered
-                                          ? "Đã đăng ký"
-                                          : isFull
-                                            ? "Đã đủ người"
-                                            : isPastShift
-                                              ? "Đã qua"
-                                              : "Đăng ký ca"}
+                                      {cancellingShiftId ===
+                                      String(registeredShift.id)
+                                        ? "Đang hủy…"
+                                        : "Hủy ca"}
                                     </button>
                                   )}
                                 </div>
-                              </article>
-                            );
-                          })}
-                        </div>
-                      </section>
-                    );
-                  })}
+                              );
+                            })}
+                          </div>
+                          <div className="shift-slot-action">
+                            <span>{slotShifts.length}/2 nhân viên</span>
+                            {isEligible && (
+                              <button
+                                className="shift-register-button"
+                                type="button"
+                                disabled={
+                                  loading ||
+                                  !isWithinRegistrationWindow ||
+                                  isPastShift ||
+                                  isFull ||
+                                  alreadyRegistered ||
+                                  submittingSlot === slotKey
+                                }
+                                onClick={() =>
+                                  registerShift(selectedDateKey, shiftOption)
+                                }
+                              >
+                                {submittingSlot === slotKey
+                                  ? "Đang đăng ký…"
+                                  : alreadyRegistered
+                                    ? "Đã đăng ký"
+                                    : isFull
+                                      ? "Đã đủ người"
+                                      : isPastShift
+                                        ? "Đã qua"
+                                        : !isWithinRegistrationWindow
+                                          ? "Ngoài 7 ngày đăng ký"
+                                          : "Đăng ký ca"}
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <p className="shift-swipe-hint">
+                    Vuốt sang trái hoặc phải để đổi ngày
+                  </p>
                 </div>
               </div>
             )}
           </section>
         </div>
+        {user && ["staff", "admin"].includes(user.role) && (
+          <StaffPayrollSection />
+        )}
       </div>
     </section>
   );

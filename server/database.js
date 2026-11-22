@@ -258,6 +258,11 @@ export async function initializeDatabase() {
       start_time TIME NOT NULL,
       end_time TIME NOT NULL,
       note VARCHAR(300) NOT NULL DEFAULT '',
+      is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+      overtime_minutes INT UNSIGNED NOT NULL DEFAULT 0,
+      completed_at TIMESTAMP NULL,
+      check_in_at DATETIME(3) NULL,
+      check_out_at DATETIME(3) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT staff_shifts_user_fk FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE CASCADE,
@@ -272,6 +277,20 @@ export async function initializeDatabase() {
       CONSTRAINT posts_user_fk FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE CASCADE,
       INDEX posts_created_at_idx (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS blog_posts (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      excerpt VARCHAR(400) NOT NULL DEFAULT '',
+      content MEDIUMTEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT blog_posts_user_fk FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+      INDEX blog_posts_created_at_idx (created_at, id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -324,6 +343,34 @@ export async function initializeDatabase() {
   `;
   for (const statement of schema.split(";").map((item) => item.trim()).filter(Boolean)) {
     await database.query(statement);
+  }
+
+  const [staffShiftColumns] = await database.query("SHOW COLUMNS FROM staff_shifts");
+  const staffShiftColumnNames = new Set(staffShiftColumns.map(({ Field }) => Field));
+  if (!staffShiftColumnNames.has("is_completed")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT FALSE AFTER note",
+    );
+  }
+  if (!staffShiftColumnNames.has("overtime_minutes")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN overtime_minutes INT UNSIGNED NOT NULL DEFAULT 0 AFTER is_completed",
+    );
+  }
+  if (!staffShiftColumnNames.has("completed_at")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN completed_at TIMESTAMP NULL AFTER overtime_minutes",
+    );
+  }
+  if (!staffShiftColumnNames.has("check_in_at")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN check_in_at DATETIME(3) NULL AFTER completed_at",
+    );
+  }
+  if (!staffShiftColumnNames.has("check_out_at")) {
+    await database.query(
+      "ALTER TABLE staff_shifts ADD COLUMN check_out_at DATETIME(3) NULL AFTER check_in_at",
+    );
   }
 
   const [orderColumns] = await database.query("SHOW COLUMNS FROM orders");

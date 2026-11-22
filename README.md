@@ -47,12 +47,24 @@ npm start
   khẩu được băm bằng scrypt.
 - Quản trị viên tạo tài khoản nhân viên trong trang `/admin`. Nhân viên đăng
   nhập để đăng ký giờ làm tại `/shifts`; nhân viên và quản trị viên đã đăng
-  nhập đều có thể đăng ký. Bảng lịch có thể xem công khai.
+  nhập đều có thể đăng ký. Bảng lịch có thể xem công khai. Nhân viên xem lịch
+  theo từng ngày trong 7 ngày tới, vuốt để xem ngày liền kề và xem lại hai ngày
+  trước; chỉ được đăng ký ca chưa qua trong khung 7 ngày. Nhân viên xem lịch
+  công theo tháng và lương tạm tính của mình; quản trị viên xem toàn bộ nhân
+  sự, sửa giờ chấm công và xác nhận ca đã làm. Trong ngày của ca, nhân viên
+  check-in từ giờ bắt đầu ca đến giờ kết thúc, rồi check-out khi làm xong.
+  Tổng thời gian tính từ check-in đến check-out, không tự trừ giờ nghỉ. Mỗi ca
+  chuẩn tối đa 5 giờ tính 20.000đ/giờ; phần thời gian vượt 5 giờ tính
+  30.000đ/giờ. Ca chỉ được tính lương sau khi có đủ check-in/check-out và được
+  quản trị viên xác nhận.
 - Trang `/admin` có điều hướng quản trị và form đăng món mới, xem trước ảnh,
   giới thiệu chi tiết từ 1.001 ký tự, thư viện đúng 3 ảnh, danh sách món hiện
   tại, chỉnh sửa sản phẩm và tùy chọn đánh dấu món bán chạy. Sản phẩm được
   phân vào một trong bốn danh mục: nước ép, cà phê, sinh tố hoặc trà sữa. Món
   được đánh dấu bán chạy sẽ được gợi ý trên trang chi tiết các món khác.
+- Blog tại `/blog` hiển thị bài viết công khai; chỉ quản trị viên đã đăng nhập
+  mới có thể đăng bài. Trang chi tiết từng bài có đường dẫn `/blog/:blogId`;
+  trang sản phẩm hiển thị món gợi ý và ba bài blog mới nhất ở cột bên phải.
 - Trang chi tiết món hiển thị phần giới thiệu, điểm trung bình và nhận xét của
   khách hàng. Tài khoản khách hàng đã đăng nhập có thể gửi hoặc cập nhật một
   đánh giá cho mỗi món; tài khoản chưa đăng nhập chỉ xem được đánh giá.
@@ -95,8 +107,17 @@ API tự tạo các bảng MySQL cho thực đơn, tài khoản mẫu, đơn hà
   các trang món để công cụ tìm kiếm thu thập.
 - `GET /api/locations`
 - `GET /api/comments`
-- `GET /api/staff-shifts`, `POST /api/staff-shifts` (POST yêu cầu tài khoản
-  nhân viên hoặc quản trị viên)
+- `GET /api/blog`, `GET /api/blog/:blogId`, `POST /api/blog` (POST yêu cầu
+  phiên quản trị viên)
+- `GET /api/staff-shifts` (lịch chung; thêm `?month=YYYY-MM` để nhân viên xem
+  bảng công của mình hoặc quản trị viên xem toàn bộ)
+- `POST /api/staff-shifts` (yêu cầu tài khoản nhân viên hoặc quản trị viên),
+- `POST /api/staff-shifts/:shiftId/check-in` và
+  `POST /api/staff-shifts/:shiftId/check-out` (nhân viên chấm công cho ca của
+  mình trong ngày làm)
+- `PATCH /api/staff-shifts/:shiftId/attendance` (yêu cầu quản trị viên; sửa
+  giờ chấm công), `PATCH /api/staff-shifts/:shiftId/completion` (yêu cầu quản
+  trị viên; duyệt hoặc bỏ duyệt ca)
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`,
   `GET /api/auth/me`
 - `GET /api/posts`, `POST /api/posts`, `POST /api/posts/:postId/comments`,
