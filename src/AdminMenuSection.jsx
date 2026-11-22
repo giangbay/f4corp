@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchApi, useApiResource } from "./api.js";
+import RichTextEditor, {
+  RichTextContent,
+} from "./components/RichTextEditor.jsx";
 import { getMenuCategoryLabel, MENU_CATEGORIES } from "./menuCategories.js";
 import { getMenuItemPath } from "./menuSlug.js";
 
@@ -45,9 +48,10 @@ function ProductPreview({ product }) {
         </div>
         <p>{product.description || "Mô tả món ăn, hương vị và nguyên liệu."}</p>
         {product.introduction && (
-          <p className="admin-product-introduction-preview">
-            {product.introduction}
-          </p>
+          <RichTextContent
+            className="admin-product-introduction-preview"
+            content={product.introduction}
+          />
         )}
         <span className="price">
           {Number(product.price || 0).toLocaleString("vi-VN")}đ
@@ -303,23 +307,19 @@ export default function AdminMenuSection() {
             required
           />
 
-          <label htmlFor="product-introduction">
-            Giới thiệu chi tiết (tối thiểu 1.001 ký tự)
-          </label>
-          <textarea
+          <RichTextEditor
             id="product-introduction"
-            name="introduction"
+            label="Giới thiệu chi tiết (tối thiểu 1.001 ký tự)"
             value={product.introduction}
-            onChange={updateField}
+            onChange={(introduction) =>
+              setProduct((current) => ({ ...current, introduction }))
+            }
             minLength={1001}
             maxLength={5000}
             rows={9}
             placeholder="Viết câu chuyện, nguyên liệu, cách pha chế, hương vị và trải nghiệm thưởng thức của món (ít nhất 1.001 ký tự)"
             required
           />
-          <span className="admin-character-count">
-            {product.introduction.length.toLocaleString("vi-VN")}/5.000 ký tự
-          </span>
 
           <label htmlFor="product-price">Giá bán (đ)</label>
           <input

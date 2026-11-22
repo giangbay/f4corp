@@ -61,7 +61,9 @@ npm start
   giới thiệu chi tiết từ 1.001 ký tự, thư viện đúng 3 ảnh, danh sách món hiện
   tại, chỉnh sửa sản phẩm và tùy chọn đánh dấu món bán chạy. Sản phẩm được
   phân vào một trong bốn danh mục: nước ép, cà phê, sinh tố hoặc trà sữa. Món
-  được đánh dấu bán chạy sẽ được gợi ý trên trang chi tiết các món khác.
+  được đánh dấu bán chạy sẽ được gợi ý trên trang chi tiết các món khác. Nội
+  dung giới thiệu sản phẩm và bài Blog có trình soạn thảo hỗ trợ in đậm,
+  in nghiêng, tiêu đề, danh sách, trích dẫn và đường dẫn.
 - Blog tại `/blog` hiển thị bài viết công khai; chỉ quản trị viên đã đăng nhập
   mới có thể đăng bài. Trang chi tiết từng bài có đường dẫn `/blog/:blogId`;
   trang sản phẩm hiển thị món gợi ý và ba bài blog mới nhất ở cột bên phải.

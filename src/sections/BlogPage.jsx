@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../AuthContext.jsx";
 import { fetchApi, useApiResource } from "../api.js";
+import RichTextEditor, {
+  RichTextContent,
+} from "../components/RichTextEditor.jsx";
 
 function formatPublishDate(value) {
   return new Date(value).toLocaleDateString("vi-VN", {
@@ -63,17 +66,17 @@ function BlogPostForm({ onCreated }) {
           rows={2}
           placeholder="Một vài dòng giới thiệu cho danh sách blog…"
         />
-        <label htmlFor="blog-content">Nội dung</label>
-        <textarea
+        <RichTextEditor
           id="blog-content"
+          label="Nội dung bài viết"
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={setContent}
           minLength={20}
           maxLength={50000}
           rows={8}
+          placeholder="Viết nội dung bài viết tại đây…"
           required
         />
-        <span className="admin-character-count">{content.length}/50.000 ký tự</span>
         {error && <p className="form-message form-message-error" role="alert">{error}</p>}
         <button className="button" type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Đang đăng…" : "Đăng bài"}
@@ -131,7 +134,10 @@ export default function BlogPage() {
                 </time>
               </div>
               {article.excerpt && <p className="blog-article-excerpt">{article.excerpt}</p>}
-              <div className="blog-article-content">{article.content}</div>
+              <RichTextContent
+                className="blog-article-content"
+                content={article.content}
+              />
             </article>
           )}
         </div>

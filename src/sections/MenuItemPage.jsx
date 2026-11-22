@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext.jsx";
 import { useApiResource } from "../api.js";
 import MenuItemSidebar from "../components/MenuItemSidebar.jsx";
 import MenuReviews from "../components/MenuReviews.jsx";
+import { RichTextContent } from "../components/RichTextEditor.jsx";
 import ResourceStatus from "../components/ResourceStatus.jsx";
 import SeoMetadata from "../components/SeoMetadata.jsx";
 import NotFoundPage from "./NotFoundPage.jsx";
@@ -171,7 +172,10 @@ export default function MenuItemPage() {
               >
                 <span className="eyebrow">Câu chuyện hương vị</span>
                 <h2 id="menu-introduction-heading">Giới thiệu về {item.name}</h2>
-                <p>{introduction}</p>
+                <RichTextContent
+                  className="menu-item-introduction-content"
+                  content={introduction}
+                />
               </section>
               <MenuReviews
                 menuId={item.id}

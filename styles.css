@@ -1130,14 +1130,50 @@ img {
   gap: 9px;
 }
 
-.blog-editor-form label {
+.rich-text-editor {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.rich-text-editor > label,
+.blog-editor-form > label {
   margin-top: 3px;
   font-size: 11px;
   font-weight: 600;
 }
 
-.blog-editor-form input,
-.blog-editor-form textarea {
+.rich-text-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  background: #f0eee7;
+}
+
+.rich-text-toolbar button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.rich-text-toolbar button:hover,
+.rich-text-toolbar button:focus-visible {
+  border-color: #cbd4c8;
+  background: var(--paper);
+}
+
+.rich-text-editor textarea,
+.blog-editor-form input {
   width: 100%;
   min-height: 40px;
   padding: 10px;
@@ -1149,8 +1185,67 @@ img {
   font-size: 12px;
 }
 
-.blog-editor-form textarea {
+.rich-text-editor textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   resize: vertical;
+}
+
+.rich-text-editor-help {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.rich-text-content > :first-child {
+  margin-top: 0;
+}
+
+.rich-text-content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text-content h2,
+.rich-text-content h3,
+.rich-text-content h4 {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.rich-text-content h3 {
+  font-size: 1.25em;
+}
+
+.rich-text-content h4 {
+  font-size: 1.1em;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+  padding-left: 1.5em;
+}
+
+.rich-text-content blockquote {
+  margin-inline: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--orange);
+  color: var(--muted);
+}
+
+.rich-text-content code {
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: #eeece5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.rich-text-content a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .blog-article {
@@ -1174,7 +1269,7 @@ img {
   color: var(--ink);
   font-size: 14px;
   line-height: 1.95;
-  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .menu-breadcrumb {
@@ -3068,6 +3163,39 @@ img {
 
 .admin-product-form > textarea {
   resize: vertical;
+}
+
+.admin-product-form > .rich-text-editor > label {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-product-form > .rich-text-editor textarea {
+  min-height: 190px;
+  background: var(--cream);
+  font-size: 12px;
+}
+
+.admin-product-form > .rich-text-editor textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px #435b451a;
+}
+
+.admin-product-introduction-preview {
+  max-height: 120px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.admin-product-preview-copy .admin-product-introduction-preview p {
+  display: block;
+  margin: 7px 0;
+  font-size: inherit;
+  line-height: inherit;
+  -webkit-line-clamp: unset;
 }
 
 .admin-gallery-fields {

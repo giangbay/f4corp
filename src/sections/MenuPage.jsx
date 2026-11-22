@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useApiResource } from "../api.js";
 import ResourceStatus from "../components/ResourceStatus.jsx";
-import CommentsSection from "./CommentsSection.jsx";
 import { getMenuCategoryLabel, MENU_CATEGORIES } from "../menuCategories.js";
 import { getMenuItemPath } from "../menuSlug.js";
 import { useOrder } from "../OrderContext.jsx";
@@ -123,7 +122,6 @@ export default function MenuPage() {
           )}
         </div>
       </section>
-      <CommentsSection />
     </>
   );
 }
