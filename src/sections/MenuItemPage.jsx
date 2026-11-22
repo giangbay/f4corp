@@ -152,9 +152,6 @@ export default function MenuItemPage() {
                     >
                       Thêm vào đơn
                     </button>
-                    <Link className="button" to="/visit">
-                      Ghé quán thưởng thức
-                    </Link>
                     <Link className="text-link" to="/menu">
                       ← Quay lại thực đơn
                     </Link>

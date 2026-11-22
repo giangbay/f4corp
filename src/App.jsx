@@ -8,6 +8,7 @@ import ScrollProgress from "./components/ScrollProgress.jsx";
 import ScrollToLocation from "./components/ScrollToLocation.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import SiteHeader from "./components/SiteHeader.jsx";
+import { OrderProvider } from "./OrderContext.jsx";
 import HomePage from "./sections/HomePage.jsx";
 import MenuItemPage from "./sections/MenuItemPage.jsx";
 import MenuPage from "./sections/MenuPage.jsx";
@@ -18,7 +19,7 @@ import VisitPage from "./sections/VisitPage.jsx";
 
 export default function App() {
   return (
-    <>
+    <OrderProvider>
       <ScrollProgress />
       <ScrollToLocation />
       <SiteHeader />
@@ -39,6 +40,6 @@ export default function App() {
         </Routes>
       </main>
       <SiteFooter />
-    </>
+    </OrderProvider>
   );
 }
